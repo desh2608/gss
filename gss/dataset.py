@@ -43,6 +43,8 @@ class RTTMDataset:
         duration = (
             max(min_num_samples, example["end"] - example["start"]) / self._sample_rate
         )
+        # Make sure duration does not exceed the recording length
+        duration = min(duration, self._recording.duration)
         example["audio_data"] = self._recording.load_audio(
             offset=offset, duration=duration
         )
