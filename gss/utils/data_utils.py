@@ -1,7 +1,6 @@
 import numpy as np
 
 from gss.utils.numpy_utils import segment_axis
-from gss.utils import keys as K
 
 
 def start_end_context_frames(ex, stft_size, stft_shift, stft_fading):
