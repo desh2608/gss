@@ -14,8 +14,6 @@ from itertools import groupby
 import argparse
 import logging
 
-import sys, os
-
 from lhotse import load_manifest
 from lhotse.recipes import prepare_libricss
 from gss.core.enhancer import run_enhancer

@@ -10,8 +10,6 @@ class GSS:
     iterations: int
     iterations_post: int
 
-    verbose: bool = True
-
     # use_pinv: bool = False
     # stable: bool = True
 
@@ -25,15 +23,13 @@ class GSS:
         source_active_mask = np.asarray(acitivity_freq, dtype=np.bool)
         source_active_mask = np.repeat(source_active_mask[None, ...], 513, axis=0)
 
+
         cacGMM = CACGMMTrainer()
 
         all_affiliations = []
         F = Obs.shape[-1]
         T = Obs.T.shape[-2]
         for f in range(F):
-            if self.verbose:
-                if f % 50 == 0:
-                    print(f"{f}/{F}")
 
             # T: Consider end of signal.
             # This should not be nessesary, but activity is for inear and not for

@@ -8,6 +8,7 @@ d, D ... channel
 a, A ... array
 """
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 import torch
@@ -15,7 +16,13 @@ import torchaudio
 
 from gss.utils.data_utils import activity_time_to_frequency, start_end_context_frames
 from gss.dataset import RTTMDataset
-from gss.core import WPE, GSS, Beamformer, Activity
+from gss.core import WPE, GSS, Beamformer, Activity, activity
+
+logging.basicConfig(
+    format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d:%H:%M:%S",
+    level=logging.DEBUG,
+)
 
 
 def run_enhancer(args):
@@ -70,7 +77,6 @@ def get_enhancer(
         gss_block=GSS(
             iterations=bss_iterations,
             iterations_post=bss_iterations_post,
-            verbose=False,
         ),
         bf_drop_context=bf_drop_context,
         bf_block=Beamformer(
@@ -137,7 +143,7 @@ class Enhancer:
         ):
             try:
                 example_id = ex["example_id"]
-                print(f"Enhancing example {example_id}")
+                logging.info(f"Enhancing example {example_id}")
                 x_hat = self.enhance_example(ex)
 
                 save_path = out_dir / f"{example_id}.wav"
@@ -147,14 +153,10 @@ class Enhancer:
                     save_path, torch.tensor(x_hat, dtype=torch.float32), 16000
                 )
             except Exception:
-                print("ERROR: Failed example:", ex["example_id"])
+                logging.error(f"Failed example: {ex['example_id']}")
                 raise
 
-    def enhance_example(
-        self,
-        ex,
-        debug=False,
-    ):
+    def enhance_example(self, ex):
         session_id = ex["session_id"]
         speaker_id = ex["speaker_id"]
 
@@ -169,11 +171,7 @@ class Enhancer:
         obs = ex["audio_data"]
 
         x_hat = self.enhance_observation(
-            obs,
-            ex_array_activity=ex_array_activity,
-            speaker_id=speaker_id,
-            ex=ex,
-            debug=debug,
+            obs, ex_array_activity=ex_array_activity, speaker_id=speaker_id, ex=ex
         )
 
         if self.context_samples > 0:
@@ -183,24 +181,18 @@ class Enhancer:
             num_samples_orig = ex["num_samples_orig"]
             x_hat = x_hat[..., start_context : start_context + num_samples_orig]
 
-        if debug:
-            self.enhance_example_locals = locals()
-
         return x_hat
 
-    def enhance_observation(
-        self,
-        obs,
-        ex_array_activity,
-        speaker_id,
-        ex=None,
-        debug=False,
-    ):
+    def enhance_observation(self, obs, ex_array_activity, speaker_id, ex=None):
+
+        # Compute STFT for observation
         Obs = self.stft(obs)
 
+        # Apply WPE for dereverberation
         if self.wpe_block is not None:
-            Obs = self.wpe_block(Obs, debug=debug)
+            Obs = self.wpe_block(Obs)
 
+        # Convert activity to frequency domain
         acitivity_freq = activity_time_to_frequency(
             np.array(list(ex_array_activity.values())),
             stft_window_length=self.stft_size,
@@ -209,7 +201,8 @@ class Enhancer:
             stft_pad=True,
         )
 
-        masks = self.gss_block(Obs, acitivity_freq, debug=debug)
+        # Apply GSS
+        masks = self.gss_block(Obs, acitivity_freq)
 
         if self.bf_drop_context:
             start_context_frames, end_context_frames = start_end_context_frames(
@@ -230,16 +223,14 @@ class Enhancer:
             axis=0,
         )
 
+        # Apply beamforming
         X_hat = self.bf_block(
             Obs,
             target_mask=target_mask,
             distortion_mask=distortion_mask,
-            debug=debug,
         )
 
+        # Compute inverse STFT
         x_hat = self.istft(X_hat)
-
-        if debug:
-            self.enhance_observation_locals = locals()
 
         return x_hat
