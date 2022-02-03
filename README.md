@@ -80,6 +80,9 @@ The RTTM files must be placed in a directory, with each session having its own R
 After the processing is complete (it may take a while if the RTTM file has a lot of segments), 
 the enhanced wav files will be written to `exp/libricss/enhanced` . The wav files are named
 as *recoid-spkid-start_end.wav*, i.e., 1 wav file is generated for each segment in the RTTM.
+The "start" and "end" are padded to 6 digits, for example: 21.18 seconds is encoded as
+`002118` . This convention should be fine if your audio duration is under ~2.75 h (9999s), 
+otherwise, you should change the padding in `RTTMDataset::_example_id` in `gss/dataset.py` .
 
 **NOTE:** If your RTTM contains too many segments, we suggest removing extremely short segments
 which are likely to be non-words or false alarms. In the future, we may build this option

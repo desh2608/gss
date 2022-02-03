@@ -42,7 +42,7 @@ def run_enhancer(args):
 
 def get_enhancer(
     rttm,
-    context_samples=240000, # 15 seconds
+    context_samples=240000,  # 15 seconds
     wpe=True,
     wpe_tabs=10,
     wpe_delay=2,
@@ -138,9 +138,12 @@ class Enhancer:
             out_dir: Path to output directory for enhanced audio files
         Returns:
         """
+        num_total = 0
+        num_errors = 0
         for ex in dataset.get_examples(
             audio_read=True, context_samples=self.context_samples
         ):
+            num_total += 1
             try:
                 example_id = ex["example_id"]
                 logging.info(f"Enhancing example {example_id}")
@@ -154,7 +157,9 @@ class Enhancer:
                 )
             except Exception:
                 logging.error(f"Failed example: {ex['example_id']}")
-                raise
+                num_errors += 1
+                continue
+        logging.info(f"Finished enhancing {num_total} examples. {num_errors} failed.")
 
     def enhance_example(self, ex):
         session_id = ex["session_id"]
@@ -193,7 +198,7 @@ class Enhancer:
             Obs = self.wpe_block(Obs)
 
         # Convert activity to frequency domain
-        acitivity_freq = activity_time_to_frequency(
+        activity_freq = activity_time_to_frequency(
             np.array(list(ex_array_activity.values())),
             stft_window_length=self.stft_size,
             stft_shift=self.stft_shift,
@@ -202,7 +207,7 @@ class Enhancer:
         )
 
         # Apply GSS
-        masks = self.gss_block(Obs, acitivity_freq)
+        masks = self.gss_block(Obs, activity_freq)
 
         if self.bf_drop_context:
             start_context_frames, end_context_frames = start_end_context_frames(

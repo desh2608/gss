@@ -39,8 +39,10 @@ class RTTMDataset:
         return f"{self._recording.id}-{speaker_id}-{int(start_time*100):06d}-{int(end_time*100):06d}"
 
     def _load_audio(self, example):
+        # We have the start and end times in terms of #samples, but we need to convert
+        # them to offset and duration in seconds to use with Lhotse.
         offset = example["start"] / self._sample_rate
-        duration = (example["end"] - offset) / self._sample_rate
+        duration = (example["end"] - example["start"]) / self._sample_rate
         example["audio_data"] = self._recording.load_audio(
             offset=offset, duration=duration
         )
