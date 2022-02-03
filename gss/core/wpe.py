@@ -11,7 +11,7 @@ class WPE:
     iterations: int
     psd_context: int
 
-    def __call__(self, Obs, stack=None, debug=False):
+    def __call__(self, Obs, stack=None):
 
         if Obs.ndim == 3:
             assert stack is None, stack
@@ -47,8 +47,5 @@ class WPE:
                 raise NotImplementedError(stack)
         else:
             raise NotImplementedError(Obs.shape)
-
-        if debug:
-            self.locals = locals()
 
         return Obs

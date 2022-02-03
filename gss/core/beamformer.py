@@ -8,7 +8,7 @@ class Beamformer:
     type: str
     postfilter: str
 
-    def __call__(self, Obs, target_mask, distortion_mask, debug=False):
+    def __call__(self, Obs, target_mask, distortion_mask):
         bf = self.type
 
         if bf == "mvdrSouden_ban":
@@ -37,8 +37,5 @@ class Beamformer:
             X_hat = X_hat * target_mask
         else:
             raise NotImplementedError(self.postfilter)
-
-        if debug:
-            self.locals = locals()
 
         return X_hat

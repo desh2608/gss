@@ -24,11 +24,11 @@ class RTTMDataset:
 
     @cached_property
     def _rttm(self):
-        from paderbox.array import intervall as array_intervall
+        from paderbox.array import interval as array_interval
 
         # NOTE: The following takes care of the case if the RTTM file has more than
         # one session, although ideally this shouldn't happen.
-        rttm = array_intervall.from_rttm(self._rttm_path)[self._recording.id]
+        rttm = array_interval.from_rttm(self._rttm_path)[self._recording.id]
 
         return rttm
 

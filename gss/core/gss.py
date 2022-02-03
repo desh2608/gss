@@ -3,7 +3,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from pb_bss.distribution import CACGMMTrainer
-from pb_bss.distribution.utils import stack_parameters
 
 
 @dataclass
@@ -16,7 +15,7 @@ class GSS:
     # use_pinv: bool = False
     # stable: bool = True
 
-    def __call__(self, Obs, acitivity_freq, debug=False):
+    def __call__(self, Obs, acitivity_freq):
 
         initialization = np.asarray(acitivity_freq, dtype=np.float64)
         initialization = np.where(initialization == 0, 1e-10, initialization)
@@ -28,8 +27,6 @@ class GSS:
 
         cacGMM = CACGMMTrainer()
 
-        if debug:
-            learned = []
         all_affiliations = []
         F = Obs.shape[-1]
         T = Obs.T.shape[-2]
@@ -64,14 +61,8 @@ class GSS:
                     Obs.T[f, ...], source_activity_mask=source_active_mask[f, ..., :T]
                 )
 
-            if debug:
-                learned.append(cur)
             all_affiliations.append(affiliation)
 
         posterior = np.array(all_affiliations).transpose(1, 2, 0)
-
-        if debug:
-            learned = stack_parameters(learned)
-            self.locals = locals()
 
         return posterior
