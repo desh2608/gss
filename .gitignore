@@ -1,9 +1,3 @@
-sacred
-CHiME5
-cache/
-
-pb_chime5/nt/speech_enhancement/cythonized/get_gev_vector_cpp.hpp
-
 # PyCharm
 .idea/
 
