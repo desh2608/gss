@@ -29,6 +29,7 @@ setup(
         "numpy==1.20.3",
         "scikit-learn==0.19.2",  # Don't upgrade scikit-learn (sklearn.mixture.gaussian_mixture is removed)
         "paderbox @ git+http://github.com/fgnt/paderbox",
+        "lhotse",
     ],  # Optional
     extras_require={  # Optional
         "dev": ["check-manifest"],
