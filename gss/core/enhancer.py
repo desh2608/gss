@@ -42,7 +42,7 @@ def run_enhancer(args):
 
 def get_enhancer(
     rttm,
-    context_samples=240000,
+    context_samples=240000, # 15 seconds
     wpe=True,
     wpe_tabs=10,
     wpe_delay=2,

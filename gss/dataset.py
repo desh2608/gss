@@ -20,6 +20,7 @@ class RTTMDataset:
         self._recording = recording
         self._rttm_path = rttm_path
         self._sample_rate = recording.sampling_rate
+        self._num_samples = recording.duration * self._sample_rate
         assert isinstance(recording, Recording)
 
     @cached_property
@@ -38,13 +39,8 @@ class RTTMDataset:
         return f"{self._recording.id}-{speaker_id}-{int(start_time*100):06d}-{int(end_time*100):06d}"
 
     def _load_audio(self, example):
-        min_num_samples = example.get("end_orig", example["end"]) - example["start"]
         offset = example["start"] / self._sample_rate
-        duration = (
-            max(min_num_samples, example["end"] - example["start"]) / self._sample_rate
-        )
-        # Make sure duration does not exceed the recording length
-        duration = min(duration, self._recording.duration)
+        duration = (example["end"] - offset) / self._sample_rate
         example["audio_data"] = self._recording.load_audio(
             offset=offset, duration=duration
         )
@@ -71,13 +67,12 @@ class RTTMDataset:
         self,
         audio_read=False,
         context_samples=0,
-        equal_start_context=False,
     ):
         for ex in self.data:
             if context_samples > 0:
                 ex = backup_orig_start_end(ex)
                 ex = add_context(
-                    ex, context_samples, equal_start_context=equal_start_context
+                    ex, context_samples, recording_length=self._num_samples
                 )
 
             if audio_read:
