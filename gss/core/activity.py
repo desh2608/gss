@@ -1,32 +1,35 @@
 from dataclasses import dataclass
-from cached_property import cached_property
 
-from paderbox.array import interval as array_interval
+from lhotse import CutSet
+
+import numpy as np
 
 
 @dataclass  # (hash=True)
 class Activity:
     garbage_class: bool = False
-    rttm: str = None
+    cuts: "CutSet" = None
 
-    @cached_property
-    def _data(self):
-        data = array_interval.from_rttm(self.rttm)
-        return data
+    def __post_init__(self):
+        self.activity = {}
+        self.speaker_to_idx_map = {}
+        for cut in self.cuts:
+            self.speaker_to_idx_map[cut.recording_id] = {
+                spk: idx
+                for idx, spk in enumerate(
+                    sorted(set(s.speaker for s in cut.supervisions))
+                )
+            }
 
-    def __getitem__(self, session_id):
-        # todo: garbage class
-        data = self._data
-
-        data = data[session_id]
-
+    def get_activity(self, session_id, start_time, duration):
+        cut = self.cuts[session_id].truncate(
+            offset=start_time, duration=duration
+        )
+        activity_mask = cut.speakers_audio_mask(
+            speaker_to_idx_map=self.speaker_to_idx_map[session_id]
+        )
         if self.garbage_class is False:
-            data["Noise"] = array_interval.zeros()
+            activity_mask = np.r_[activity_mask, [np.zeros_like(activity_mask[0])]]
         elif self.garbage_class is True:
-            data["Noise"] = array_interval.ones()
-        elif self.garbage_class is None:
-            pass
-        else:
-            raise ValueError(self.garbage_class)
-
-        return data
+            activity_mask = np.r_[activity_mask, [np.ones_like(activity_mask[0])]]
+        return activity_mask, self.speaker_to_idx_map[session_id]

@@ -7,18 +7,23 @@
 # as input. If not provided, an oracle RTTM file is constructed based on the annotations.
 #
 # Usage:
-#   python run_libricss.py -j 30 -r data/libricss/rttm /export/data/LibriCSS exp/
+#   python run_libricss.py -j 50 -r data/libricss/rttm -m 0.2 /export/data/LibriCSS exp/
 
 from pathlib import Path
-from itertools import groupby
 import argparse
 import logging
 
-from lhotse import load_manifest
+from lhotse import (
+    SupervisionSet,
+    CutSet,
+    load_manifest,
+    validate_recordings_and_supervisions,
+    fix_manifests,
+)
 from lhotse.recipes import prepare_libricss
-from gss.core.enhancer import run_enhancer
+from lhotse.utils import fastcopy
 
-import plz
+import gss
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -33,14 +38,20 @@ def read_args():
     parser.add_argument("corpus_dir", type=str, help="Path to LibriCSS corpus")
     parser.add_argument("exp_dir", type=str, help="Path to experiment directory")
     parser.add_argument(
-        "--rttm-dir",
+        "--rttm-path",
         "-r",
         type=str,
         default=None,
-        help="Directory containing RTTM files",
+        help="Path to RTTM file (or directory containing RTTM files)",
     )
     parser.add_argument("--num-jobs", "-j", type=int, default=1, help="Number of jobs")
-    parser.add_argument("--cleanup", action="store_true", help="Cleanup Dask logs")
+    parser.add_argument(
+        "--min-segment-length",
+        "-m",
+        type=float,
+        default=0.0,
+        help="Minimum segment length to retain (removing very small segments speeds up enhancement)",
+    )
     args = parser.parse_args()
     return args
 
@@ -52,58 +63,46 @@ def main(args):
     exp_dir = Path(args.exp_dir)
     exp_dir.mkdir(exist_ok=True, parents=True)
 
-    if (exp_dir / "recordings.jsonl").exists():
-        manifests = {
-            "recordings": load_manifest(exp_dir / "recordings.jsonl"),
-            "supervisions": load_manifest(exp_dir / "supervisions.jsonl"),
-        }
+    if (exp_dir / "cuts.jsonl").exists():
+        logger.info("Loading existing CutSet")
+        cuts = load_manifest(exp_dir / "cuts.jsonl")
+
     else:
         manifests = prepare_libricss(corpus_dir)
-        manifests["recordings"].to_jsonl(exp_dir / "recordings.jsonl")
-        manifests["supervisions"].to_jsonl(exp_dir / "supervisions.jsonl")
+        recordings = manifests["recordings"]
 
-    if args.rttm_dir:
-        rttm_dir = Path(args.rttm_dir)
-    elif (exp_dir / "rttm").exists():
-        logger.info("Using existing RTTM files in %s", exp_dir / "rttm")
-        rttm_dir = exp_dir / "rttm"
-    else:
-        logger.info("No rttm_dir given, preparing RTTMs from manifests")
-        rttm_dir = exp_dir / "rttm"
-        rttm_dir.mkdir(exist_ok=True, parents=True)
-        rttm_string = "SPEAKER {recording_id} 1 {start:.3f} {duration:.3f} <NA> <NA> {speaker} <NA> <NA>"
-        supervisions = sorted(
-            manifests["supervisions"], key=lambda x: (x.recording_id, x.start)
+        if args.rttm_path:
+            logger.info("Creating supervisions from RTTM file(s)")
+            rttm_path = Path(args.rttm_path)
+            rttm_files = rttm_path if rttm_path.is_file() else rttm_path.glob("*.rttm")
+            supervisions = SupervisionSet.from_rttm(rttm_files)
+
+        else:
+            supervisions = manifests["supervisions"]
+
+        supervisions = supervisions.filter(
+            lambda s: s.duration >= args.min_segment_length
         )
-        reco_to_supervision = {
-            k: list(g) for k, g in groupby(supervisions, key=lambda x: x.recording_id)
-        }
-        for recording_id, supervisions in reco_to_supervision.items():
-            with open(rttm_dir / f"{recording_id}.rttm", "w") as f:
-                for supervision in supervisions:
-                    start = supervision.start
-                    duration = supervision.duration
-                    speaker = supervision.speaker
-                    f.write(rttm_string.format(**locals()))
-                    f.write("\n")
 
-    # Create iterable of (recording_id, rttm_path, out_path)
-    iterable = list(
-        (r, rttm_dir / f"{r.id}.rttm", exp_dir / "enhanced" / f"{r.id}")
-        for r in manifests["recordings"]
+        recordings, supervisions = fix_manifests(recordings, supervisions)
+        validate_recordings_and_supervisions(recordings, supervisions)
+
+        logger.info("Creating CutSet")
+        cuts = CutSet.from_manifests(recordings=recordings, supervisions=supervisions)
+        # Only keep the cuts with channel id 0, since we only have supervisions for those
+        cuts = cuts.filter(lambda c: c.channel == 0)
+        # Now we change the cut ids to be the same as the corresponding recording id
+        cuts = CutSet.from_cuts(fastcopy(c, id=c.recording_id) for c in cuts)
+        # At this point, there is 1 cut per recording.
+        cuts.to_file(exp_dir / "cuts.jsonl")
+
+    logger.info("Creating Dask distributed executor")
+    gss.run_enhancer(
+        cuts,
+        exp_dir,
+        num_jobs=args.num_jobs,
+        error_handling="keep_original",
     )
-
-    plz.map(
-        run_enhancer,
-        iterable,
-        jobs=args.num_jobs,
-        memory="4G",
-        log_dir=exp_dir / "logs",
-    )
-
-    # Cleanup Dask logs
-    if args.cleanup:
-        (exp_dir / "logs").rmdir()
 
 
 if __name__ == "__main__":
