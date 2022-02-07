@@ -45,6 +45,7 @@ def get_enhancer(
     error_handling="ignore",
 ):
     assert wpe is True or wpe is False, wpe
+    assert len(cuts) > 0
 
     sampling_rate = cuts[0].recording.sampling_rate
 
