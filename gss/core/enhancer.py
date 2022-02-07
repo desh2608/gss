@@ -21,7 +21,7 @@ from gss.core import WPE, GSS, Beamformer, Activity
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
-    level=logging.DEBUG,
+    level=logging.INFO,
 )
 
 
@@ -127,7 +127,12 @@ class Enhancer:
         Enhance the given CutSet.
         """
         num_error = 0
-        for cut in cuts:
+        # Get cuts with extended context
+        cuts_extended = cuts.extend(
+            duration=self.context_duration, direction="both", preserve_id=True
+        )
+        for id in cuts.ids:
+            cut, cut_extended = cuts[id], cuts_extended[id]
             out_dir = exp_dir / cut.recording_id
             out_dir.mkdir(parents=True, exist_ok=True)
             save_path = f"{cut.recording_id}-{cut.supervisions[0].speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
@@ -135,15 +140,11 @@ class Enhancer:
                 f"Enhancing cut {cut.id}: {cut.recording_id} ({cut.start}s to {cut.end}s), speaker {cut.supervisions[0].speaker}"
             )
             try:
-                # Extend the cut by adding context on both sides
-                cut_extended = cut.extend(
-                    duration=self.context_duration, direction="both"
-                )
-
-                # Compute the speaker activity in the extended cut
+                # Compute the speaker activity for the extended cut
                 cut_activity, spk_to_idx_map = self.activity.get_activity(
                     cut.recording_id, cut_extended.start, cut_extended.duration
                 )
+                logging.debug(f"Computed speaker activity for cut")
 
                 # Compute the enhanced signal using the extended cut and the activity
                 x_hat = self.enhance_cut(
@@ -159,7 +160,8 @@ class Enhancer:
                     # Keep the original signal (this function will only load channel 0)
                     x_hat = cut.load_audio()
                 raise
-            # Save the enhanced signal
+
+            logging.debug("Saving enhanced signal")
             sf.write(
                 file=str(out_dir / save_path),
                 data=x_hat.transpose(),
@@ -171,18 +173,19 @@ class Enhancer:
     def enhance_cut(self, cut, cut_extended, activity, speaker_id):
 
         # We load from the recording so that we can load all channels
+        logging.debug("Loading audio")
         obs = cut_extended.recording.load_audio(
             offset=cut_extended.start, duration=cut_extended.duration
         )
 
-        # Compute STFT for observation
+        logging.debug(f"Computing STFT")
         Obs = self.stft(obs)
 
-        # Apply WPE for dereverberation
+        logging.debug(f"Applying WPE")
         if self.wpe_block is not None:
             Obs = self.wpe_block(Obs)
 
-        # Convert activity to frequency domain
+        logging.debug(f"Converting activity to frequency domain")
         activity_freq = activity_time_to_frequency(
             activity,
             stft_window_length=self.stft_size,
@@ -191,23 +194,26 @@ class Enhancer:
             stft_pad=True,
         )
 
-        # Apply GSS
+        logging.debug(f"Computing GSS masks")
         masks = self.gss_block(Obs, activity_freq)
 
         orig_start = compute_num_samples(cut.start, self.sampling_rate)
         orig_end = compute_num_samples(cut.end, self.sampling_rate)
+        new_start = compute_num_samples(cut_extended.start, self.sampling_rate)
+        new_end = compute_num_samples(cut_extended.end, self.sampling_rate)
+        start_context = orig_start - new_start
+        end_context = new_end - orig_end
         if self.bf_drop_context:
-            # Replace the context with zeros
-            new_start = compute_num_samples(cut_extended.start, self.sampling_rate)
-            new_end = compute_num_samples(cut_extended.end, self.sampling_rate)
-            start_context = orig_start - new_start
-            end_context = new_end - orig_end
+            logging.debug("Dropping context for beamforming")
             start_context_frames, end_context_frames = start_end_context_frames(
                 start_context,
                 end_context,
                 stft_size=self.stft_size,
                 stft_shift=self.stft_shift,
                 stft_fading=self.stft_fading,
+            )
+            logging.debug(
+                f"start_context_frames: {start_context_frames}, end_context_frames: {end_context_frames}"
             )
 
             masks[:, :start_context_frames, :] = 0
@@ -220,20 +226,20 @@ class Enhancer:
             axis=0,
         )
 
-        # Apply beamforming
+        logging.debug("Applying beamforming with computed masks")
         X_hat = self.bf_block(
             Obs,
             target_mask=target_mask,
             distortion_mask=distortion_mask,
         )
 
-        # Compute inverse STFT
+        logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)
 
         if x_hat.ndim == 1:
             x_hat = x_hat[np.newaxis, :]
 
         # Trim x_hat to original length of cut
-        x_hat = x_hat[:, orig_start:orig_end]
+        x_hat = x_hat[:, start_context:-end_context]
 
         return x_hat

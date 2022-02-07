@@ -102,6 +102,9 @@ def main(args):
         exp_dir,
         num_jobs=args.num_jobs,
         error_handling="keep_original",
+        # The following kwargs are passed to the enhancer
+        activity_garbage_class=False,
+        bss_iterations=10,
     )
 
 

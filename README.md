@@ -9,20 +9,18 @@ for the CHiME-5 challenge in [this paper](http://spandh.dcs.shef.ac.uk/chime_wor
 
 ## Features
 
-The core part of this tool is exactly the same as **pb_chime5**. The difference lies merely in
-making it easier to use for datasets other than CHiME-5. Here are the salient differences:
+The core parts of this package (i.e., WPE, mask estimation, and beamforming) are taken directly
+from pb_chime5 (which uses [pb_bss](https://github.com/fgnt/pb_bss/tree/96fd72cb5934fb3ec21a707cc54ac6263782a71a)), and therefore the expected result should be the same as using that toolkit. Our 
+major contribution is in streamlining the data pipeline using [Lhotse](https://github.com/lhotse-speech/lhotse)
+and providing example scripts for applying the enhancement on several datasets other than CHiME-5.
 
 * The GSS implementation (see `gss/core`) has been stripped of CHiME-6 dataset-specific peculiarities
 (such as array naming conventions etc.)
-* We use [Lhotse](https://github.com/lhotse-speech/lhotse) for simplified data loading, and provide
+* We use Lhotse for simplified data loading, speaker activity generation, and RTTM representation. We provide
 examples in the `scripts` directory for how to use the `gss` module for several datasets. We
 are currently aiming to support LibriCSS, AMI, and AISHELL-4.
-* `mpi` has been replaced with [plz](https://github.com/pzelasko/plz) (based on [Dask-Jobqueue](https://jobqueue.dask.org/en/latest/)) 
-for multi-node processing. To use on your own cluster, please fork `plz` and add your 
+* For distributed processing,  `mpi` has been replaced with [plz](https://github.com/pzelasko/plz) (based on [Dask-Jobqueue](https://jobqueue.dask.org/en/latest/)). To use on your own cluster, please fork `plz` and add your 
 cluster environment (currently it supports CLSP and COE clusters at JHU).
-
-The core implementation still relies on the [pb_bss](https://github.com/fgnt/pb_bss/tree/96fd72cb5934fb3ec21a707cc54ac6263782a71a) 
-and [paderbox](https://github.com/fgnt/paderbox) toolkits from Paderborn.
 
 ## Installation
 
@@ -62,6 +60,11 @@ End-to-end runnable scripts are provided in the `scripts` directory for some com
 datasets. The enhancement can be done with/without your own diarization output. If you
 do not provide your own RTTM file, we will use the ground truth annotations to generate
 a "gold" RTTM file which is then used for the mask estimation.
+
+**NOTE:** We currently use `plz` to perform distributed processing, which supports the 
+clusters at JHU. To run it on your own cluster, you can clone the Github repo, and add
+specifications for your own cluster, similar to [this PR](https://github.com/pzelasko/plz/pull/1/files), 
+and then include the argument `grid="your-grid"` in the `plz.map()` call in `gss/executor.py` .
 
 ### Without using your own RTTM
 

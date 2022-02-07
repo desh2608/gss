@@ -10,13 +10,13 @@ logging.basicConfig(
     level=logging.DEBUG,
 )
 
-# The parallel execution code here is modified from:
-# https://github.com/lhotse-speech/lhotse/blob/825a88484a130fa48f9a10ab214c725912b1d520/lhotse/cut.py#L3950
+
 def run_enhancer(
     cuts,
     exp_dir,
     num_jobs=1,
     error_handling="ignore",
+    **kwargs,
 ):
     """
     Wrapper for the enhancement.
@@ -28,8 +28,10 @@ def run_enhancer(
         error_handling: how to handle errors (one of "ignore" or "keep_original")
         progress_bar: whether to show a progress bar
     """
-    enhancer = get_enhancer(cuts=cuts, error_handling=error_handling)
+    enhancer = get_enhancer(cuts=cuts, error_handling=error_handling, **kwargs)
 
+    # Create cuts corresponding to the segments provided. The enhancement will produce
+    # 1 output audio file per segment.
     cuts = cuts.trim_to_supervisions(keep_overlapping=False)
 
     # Parallel execution: prepare the CutSet splits

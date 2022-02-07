@@ -20,10 +20,13 @@ class Activity:
                     sorted(set(s.speaker for s in cut.supervisions))
                 )
             }
+        self.supervisions_index = self.cuts.index_supervisions()
 
     def get_activity(self, session_id, start_time, duration):
         cut = self.cuts[session_id].truncate(
-            offset=start_time, duration=duration
+            offset=start_time,
+            duration=duration,
+            _supervisions_index=self.supervisions_index,
         )
         activity_mask = cut.speakers_audio_mask(
             speaker_to_idx_map=self.speaker_to_idx_map[session_id]
