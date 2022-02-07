@@ -11,38 +11,23 @@ from dataclasses import dataclass
 import logging
 
 import numpy as np
-import torch
-import torchaudio
+import soundfile as sf
+
+from lhotse.utils import compute_num_samples
 
 from gss.utils.data_utils import activity_time_to_frequency, start_end_context_frames
-from gss.dataset import RTTMDataset
-from gss.core import WPE, GSS, Beamformer, Activity, activity
+from gss.core import WPE, GSS, Beamformer, Activity
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
-    level=logging.DEBUG,
+    level=logging.INFO,
 )
 
 
-def run_enhancer(args):
-    """
-    Wrapper for the enhancement. Takes as input a tuple containing (recording, RTTM, out_dir)
-    and performs enhancement on them.
-    """
-    recording, rttm, out_dir = args
-    out_dir.mkdir(parents=True, exist_ok=True)
-    enhancer = get_enhancer(rttm=rttm)
-    dataset = RTTMDataset(recording, rttm)
-    enhancer.enhance_session(dataset, out_dir)
-    # free up memory
-    del enhancer
-    del dataset
-
-
 def get_enhancer(
-    rttm,
-    context_samples=240000,  # 15 seconds
+    cuts,
+    context_duration=15,  # 15 seconds
     wpe=True,
     wpe_tabs=10,
     wpe_delay=2,
@@ -57,11 +42,15 @@ def get_enhancer(
     bf_drop_context=True,
     bf="mvdrSouden_ban",
     postfilter=None,
+    error_handling="ignore",
 ):
     assert wpe is True or wpe is False, wpe
+    assert len(cuts) > 0
+
+    sampling_rate = cuts[0].recording.sampling_rate
 
     return Enhancer(
-        context_samples=context_samples,
+        context_duration=context_duration,
         wpe_block=WPE(
             taps=wpe_tabs,
             delay=wpe_delay,
@@ -72,7 +61,7 @@ def get_enhancer(
         else None,
         activity=Activity(
             garbage_class=activity_garbage_class,
-            rttm=rttm,
+            cuts=cuts,
         ),
         gss_block=GSS(
             iterations=bss_iterations,
@@ -86,13 +75,16 @@ def get_enhancer(
         stft_size=stft_size,
         stft_shift=stft_shift,
         stft_fading=stft_fading,
+        sampling_rate=sampling_rate,
+        error_handling=error_handling,
     )
 
 
 @dataclass
 class Enhancer:
     """
-    This class handles enhancement for a single session.
+    This class creates enhancement context (with speaker activity) for the sessions, and
+    performs the enhancement.
     """
 
     wpe_block: WPE
@@ -106,10 +98,10 @@ class Enhancer:
     stft_shift: int
     stft_fading: bool
 
-    # context_samples: int
-    # equal_start_context: bool
+    context_duration: float  # e.g. 15
+    sampling_rate: int
 
-    context_samples: int  # e.g. 240000
+    error_handling: str = "ignore"
 
     def stft(self, x):
         from paderbox.transform.module_stft import stft
@@ -131,111 +123,124 @@ class Enhancer:
             fading=self.stft_fading,
         )
 
-    def enhance_session(self, dataset, out_dir):
+    def enhance_cuts(self, cuts, exp_dir):
         """
-        Args:
-            dataset: list of segments created using the `get_dataset` method
-            out_dir: Path to output directory for enhanced audio files
-        Returns:
+        Enhance the given CutSet.
         """
-        num_total = 0
-        num_errors = 0
-        for ex in dataset.get_examples(
-            audio_read=True, context_samples=self.context_samples
-        ):
-            num_total += 1
+        num_error = 0
+        # Get cuts with extended context
+        cuts_extended = cuts.extend(
+            duration=self.context_duration, direction="both", preserve_id=True
+        )
+        for id in cuts.ids:
+            cut, cut_extended = cuts[id], cuts_extended[id]
+            out_dir = exp_dir / cut.recording_id
+            out_dir.mkdir(parents=True, exist_ok=True)
+            save_path = f"{cut.recording_id}-{cut.supervisions[0].speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
+            logging.info(
+                f"Enhancing cut {cut.id}: {cut.recording_id} ({cut.start}s to {cut.end}s), speaker {cut.supervisions[0].speaker}"
+            )
             try:
-                example_id = ex["example_id"]
-                logging.info(f"Enhancing example {example_id}")
-                x_hat = self.enhance_example(ex)
-
-                save_path = out_dir / f"{example_id}.wav"
-                if x_hat.ndim == 1:
-                    x_hat = x_hat[np.newaxis, :]  # add channel dimension
-                torchaudio.save(
-                    save_path, torch.tensor(x_hat, dtype=torch.float32), 16000
+                # Compute the speaker activity for the extended cut
+                cut_activity, spk_to_idx_map = self.activity.get_activity(
+                    cut.recording_id, cut_extended.start, cut_extended.duration
                 )
-            except Exception:
-                logging.error(f"Failed example: {ex['example_id']}")
-                num_errors += 1
-                continue
-        logging.info(f"Finished enhancing {num_total} examples. {num_errors} failed.")
+                logging.debug(f"Computed speaker activity for cut")
 
-    def enhance_example(self, ex):
-        session_id = ex["session_id"]
-        speaker_id = ex["speaker_id"]
+                # Compute the enhanced signal using the extended cut and the activity
+                x_hat = self.enhance_cut(
+                    cut,
+                    cut_extended,
+                    cut_activity,
+                    spk_to_idx_map[cut.supervisions[0].speaker],
+                )
+            except Exception as e:
+                logging.exception(f"Error enhancing cut {cut.id}: {e}")
+                num_error += 1
+                if self.error_handling == "keep_original":
+                    # Keep the original signal (this function will only load channel 0)
+                    x_hat = cut.load_audio()
+                raise
 
-        array_start = ex["start"]
-        array_end = ex["end"]
+            logging.debug("Saving enhanced signal")
+            sf.write(
+                file=str(out_dir / save_path),
+                data=x_hat.transpose(),
+                samplerate=self.sampling_rate,
+                format="FLAC",
+            )
+        return num_error
 
-        ex_array_activity = {
-            k: arr[array_start:array_end]
-            for k, arr in self.activity[session_id].items()
-        }
+    def enhance_cut(self, cut, cut_extended, activity, speaker_id):
 
-        obs = ex["audio_data"]
-
-        x_hat = self.enhance_observation(
-            obs, ex_array_activity=ex_array_activity, speaker_id=speaker_id, ex=ex
+        # We load from the recording so that we can load all channels
+        logging.debug("Loading audio")
+        obs = cut_extended.recording.load_audio(
+            offset=cut_extended.start, duration=cut_extended.duration
         )
 
-        if self.context_samples > 0:
-            start_orig = ex["start_orig"]
-            start = ex["start"]
-            start_context = start_orig - start
-            num_samples_orig = ex["num_samples_orig"]
-            x_hat = x_hat[..., start_context : start_context + num_samples_orig]
-
-        return x_hat
-
-    def enhance_observation(self, obs, ex_array_activity, speaker_id, ex=None):
-
-        # Compute STFT for observation
+        logging.debug(f"Computing STFT")
         Obs = self.stft(obs)
 
-        # Apply WPE for dereverberation
+        logging.debug(f"Applying WPE")
         if self.wpe_block is not None:
             Obs = self.wpe_block(Obs)
 
-        # Convert activity to frequency domain
+        logging.debug(f"Converting activity to frequency domain")
         activity_freq = activity_time_to_frequency(
-            np.array(list(ex_array_activity.values())),
+            activity,
             stft_window_length=self.stft_size,
             stft_shift=self.stft_shift,
             stft_fading=self.stft_fading,
             stft_pad=True,
         )
 
-        # Apply GSS
+        logging.debug(f"Computing GSS masks")
         masks = self.gss_block(Obs, activity_freq)
 
+        orig_start = compute_num_samples(cut.start, self.sampling_rate)
+        orig_end = compute_num_samples(cut.end, self.sampling_rate)
+        new_start = compute_num_samples(cut_extended.start, self.sampling_rate)
+        new_end = compute_num_samples(cut_extended.end, self.sampling_rate)
+        start_context = orig_start - new_start
+        end_context = new_end - orig_end
         if self.bf_drop_context:
+            logging.debug("Dropping context for beamforming")
             start_context_frames, end_context_frames = start_end_context_frames(
-                ex,
+                start_context,
+                end_context,
                 stft_size=self.stft_size,
                 stft_shift=self.stft_shift,
                 stft_fading=self.stft_fading,
+            )
+            logging.debug(
+                f"start_context_frames: {start_context_frames}, end_context_frames: {end_context_frames}"
             )
 
             masks[:, :start_context_frames, :] = 0
             if end_context_frames > 0:
                 masks[:, -end_context_frames:, :] = 0
 
-        target_speaker_index = tuple(ex_array_activity.keys()).index(speaker_id)
-        target_mask = masks[target_speaker_index]
+        target_mask = masks[speaker_id]
         distortion_mask = np.sum(
-            np.delete(masks, target_speaker_index, axis=0),
+            np.delete(masks, speaker_id, axis=0),
             axis=0,
         )
 
-        # Apply beamforming
+        logging.debug("Applying beamforming with computed masks")
         X_hat = self.bf_block(
             Obs,
             target_mask=target_mask,
             distortion_mask=distortion_mask,
         )
 
-        # Compute inverse STFT
+        logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)
+
+        if x_hat.ndim == 1:
+            x_hat = x_hat[np.newaxis, :]
+
+        # Trim x_hat to original length of cut
+        x_hat = x_hat[:, start_context:-end_context]
 
         return x_hat

@@ -3,12 +3,9 @@ import numpy as np
 from gss.utils.numpy_utils import segment_axis
 
 
-def start_end_context_frames(ex, stft_size, stft_shift, stft_fading):
-    start_context_samples = ex["start_orig"] - ex["start"]
-    end_context_samples = ex["end"] - ex["end_orig"]
-
-    assert start_context_samples >= 0, (start_context_samples, ex)
-    assert end_context_samples >= 0, (end_context_samples, ex)
+def start_end_context_frames(start_context_samples, end_context_samples, stft_size, stft_shift, stft_fading):
+    assert start_context_samples >= 0
+    assert end_context_samples >= 0
 
     from nara_wpe.utils import _samples_to_stft_frames
 
@@ -91,25 +88,4 @@ def activity_time_to_frequency(
         end="pad" if stft_pad else "cut",
     ).any(axis=-1)
 
-
-def backup_orig_start_end(ex):
-    ex["start_orig"] = ex["start"]
-    ex["end_orig"] = ex["end"]
-    ex["num_samples_orig"] = ex["num_samples"]
-    return ex
-
-
-def add_context(ex, samples, recording_length=None):
-
-    start_context = end_context = samples
-
-    assert "start_orig" in ex, ex
-    assert "end_orig" in ex, ex
-    assert "num_samples_orig" in ex, ex
-
-    ex["start"] = max(ex["start"] - start_context, 0)
-    ex["end"] = ex["end"] + end_context
-    if recording_length is not None:
-        ex["end"] = min(ex["end"], recording_length)
-    ex["num_samples"] = ex["end"] - ex["start"]
-    return ex
+                
