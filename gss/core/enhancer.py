@@ -129,7 +129,7 @@ class Enhancer:
         """
         num_error = 0
         # Get cuts with extended context
-        cuts_extended = cuts.extend(
+        cuts_extended = cuts.extend_by(
             duration=self.context_duration, direction="both", preserve_id=True
         )
         for id in cuts.ids:
