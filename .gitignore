@@ -105,3 +105,8 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# Experiment
+dask-worker-space/
+exp/
+data/
