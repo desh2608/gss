@@ -1,13 +1,5 @@
-"""
-
-Legend:
-n, N ... time
-t, T ... frame
-f, F ... frequency
-d, D ... channel
-a, A ... array
-"""
 from dataclasses import dataclass
+from pathlib import Path
 import logging
 
 import numpy as np
@@ -21,7 +13,7 @@ from gss.core import WPE, GSS, Beamformer, Activity
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
-    level=logging.INFO,
+    level=logging.DEBUG,
 )
 
 
@@ -132,14 +124,19 @@ class Enhancer:
         cuts_extended = cuts.extend_by(
             duration=self.context_duration, direction="both", preserve_id=True
         )
-        for id in cuts.ids:
+        for i, id in enumerate(cuts.ids):
             cut, cut_extended = cuts[id], cuts_extended[id]
             out_dir = exp_dir / cut.recording_id
             out_dir.mkdir(parents=True, exist_ok=True)
-            save_path = f"{cut.recording_id}-{cut.supervisions[0].speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
-            logging.info(
-                f"Enhancing cut {cut.id}: {cut.recording_id} ({cut.start}s to {cut.end}s), speaker {cut.supervisions[0].speaker}"
+            save_path = Path(
+                f"{cut.recording_id}-{cut.supervisions[0].speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
             )
+            logging.info(
+                f"Processing cut {i+1} ({cut.recording_id}, {cut.start}s - {cut.end}s, speaker {cut.supervisions[0].speaker}) of {len(cuts)}."
+            )
+            if (out_dir / save_path).exists():
+                logging.info(f"Skipping existing file {str(out_dir / save_path)}.")
+                continue
             try:
                 # Compute the speaker activity for the extended cut
                 cut_activity, spk_to_idx_map = self.activity.get_activity(

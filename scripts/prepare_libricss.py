@@ -3,11 +3,11 @@
 # Copyright 2022  Johns Hopkins University (Author: Desh Raj)
 # Apache 2.0
 #
-# This script performs GSS-based enhancement on LibriCSS data. An RTTM file is expected
+# This script prepares cut manifests for LibriCSS data. An RTTM file is expected
 # as input. If not provided, an oracle RTTM file is constructed based on the annotations.
 #
 # Usage:
-#   python run_libricss.py -j 50 -r data/libricss/rttm -m 0.2 /export/data/LibriCSS exp/
+#   python scripts/prepare_libricss.py -j 8 -r data/libricss/rttm -m 0.2 /export/data/LibriCSS exp/
 
 from pathlib import Path
 import argparse
@@ -22,8 +22,6 @@ from lhotse import (
 )
 from lhotse.recipes import prepare_libricss
 from lhotse.utils import fastcopy
-
-import gss
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -74,11 +72,15 @@ def main(args):
         if args.rttm_path:
             logger.info("Creating supervisions from RTTM file(s)")
             rttm_path = Path(args.rttm_path)
-            rttm_files = rttm_path if rttm_path.is_file() else rttm_path.glob("*.rttm")
+            rttm_files = rttm_path if rttm_path.is_file() else rttm_path.rglob("*.rttm")
             supervisions = SupervisionSet.from_rttm(rttm_files)
 
         else:
             supervisions = manifests["supervisions"]
+
+        channels = set(s.channel for s in supervisions)
+        assert len(channels) == 1, "Only one channel is supported"
+        channel = channels.pop()
 
         supervisions = supervisions.filter(
             lambda s: s.duration >= args.min_segment_length
@@ -90,22 +92,25 @@ def main(args):
         logger.info("Creating CutSet")
         cuts = CutSet.from_manifests(recordings=recordings, supervisions=supervisions)
         # Only keep the cuts with channel id 0, since we only have supervisions for those
-        cuts = cuts.filter(lambda c: c.channel == 0)
+        cuts = cuts.filter(lambda c: c.channel == channel)
         # Now we change the cut ids to be the same as the corresponding recording id
         cuts = CutSet.from_cuts(fastcopy(c, id=c.recording_id) for c in cuts)
         # At this point, there is 1 cut per recording.
         cuts.to_file(exp_dir / "cuts.jsonl")
 
-    logger.info("Creating Dask distributed executor")
-    gss.run_enhancer(
-        cuts,
-        exp_dir,
-        num_jobs=args.num_jobs,
-        error_handling="keep_original",
-        # The following kwargs are passed to the enhancer
-        activity_garbage_class=False,
-        bss_iterations=10,
-    )
+    # Create cuts corresponding to the segments provided. The enhancement will produce
+    # 1 output audio file per segment.
+    logger.info("Creating segments")
+    cuts = cuts.trim_to_supervisions(keep_overlapping=False)
+
+    logger.info(f"Splitting cuts into {args.num_jobs} parts")
+    cut_sets = cuts.split(args.num_jobs, shuffle=False)
+
+    logger.info("Writing cuts to disk")
+    split_dir = exp_dir / f"split{args.num_jobs}"
+    split_dir.mkdir(exist_ok=True, parents=True)
+    for i, cut_set in enumerate(cut_sets):
+        cut_set.to_file(split_dir / f"cuts.{i+1}.jsonl")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 from dataclasses import dataclass
-from nara_wpe.wpe import wpe_v8
+from wpe import wpe
+
+import cupy as cp
 
 from gss.utils.numpy_utils import morph
 
@@ -13,9 +15,11 @@ class WPE:
 
     def __call__(self, Obs, stack=None):
 
+        Obs = cp.asarray(Obs)
+
         if Obs.ndim == 3:
             assert stack is None, stack
-            Obs = wpe_v8(
+            Obs = wpe(
                 Obs.transpose(2, 0, 1),
                 taps=self.taps,
                 delay=self.delay,
@@ -26,7 +30,7 @@ class WPE:
             if stack is True:
                 _A = Obs.shape[0]
                 Obs = morph("ACTF->A*CTF", Obs)
-                Obs = wpe_v8(
+                Obs = wpe(
                     Obs.transpose(2, 0, 1),
                     taps=self.taps,
                     delay=self.delay,
@@ -35,7 +39,7 @@ class WPE:
                 ).transpose(1, 2, 0)
                 Obs = morph("A*CTF->ACTF", Obs, A=_A)
             elif stack is False:
-                Obs = wpe_v8(
+                Obs = wpe(
                     Obs.transpose(0, 3, 1, 2),
                     taps=self.taps,
                     delay=self.delay,
@@ -48,4 +52,4 @@ class WPE:
         else:
             raise NotImplementedError(Obs.shape)
 
-        return Obs
+        return cp.asnumpy(Obs)
