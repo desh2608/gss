@@ -7,7 +7,7 @@
 # as input. If not provided, an oracle RTTM file is constructed based on the annotations.
 #
 # Usage:
-#   python scripts/prepare_libricss.py -j 8 -r data/libricss/rttm -m 0.2 /export/data/LibriCSS exp/
+#   python scripts/prepare_libricss.py -j 8 -r data/libricss/rttm /export/data/LibriCSS exp/
 
 from pathlib import Path
 import argparse
@@ -45,10 +45,15 @@ def read_args():
     parser.add_argument("--num-jobs", "-j", type=int, default=1, help="Number of jobs")
     parser.add_argument(
         "--min-segment-length",
-        "-m",
         type=float,
         default=0.0,
         help="Minimum segment length to retain (removing very small segments speeds up enhancement)",
+    )
+    parser.add_argument(
+        "--max-segment-length",
+        type=float,
+        default=15.0,
+        help="Chunk up longer segments to avoid OOM issues",
     )
     args = parser.parse_args()
     return args
@@ -101,7 +106,9 @@ def main(args):
     # Create cuts corresponding to the segments provided. The enhancement will produce
     # 1 output audio file per segment.
     logger.info("Creating segments")
-    cuts = cuts.trim_to_supervisions(keep_overlapping=False)
+    cuts = cuts.trim_to_supervisions(keep_overlapping=False).cut_into_windows(
+        duration=args.max_segment_length
+    )
 
     logger.info(f"Splitting cuts into {args.num_jobs} parts")
     cut_sets = cuts.split(args.num_jobs, shuffle=False)

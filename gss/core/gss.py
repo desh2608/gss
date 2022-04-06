@@ -12,7 +12,6 @@ class GSS:
 
     def __call__(self, Obs, acitivity_freq):
 
-        Obs = cp.asarray(Obs)
         initialization = cp.asarray(acitivity_freq, dtype=cp.float64)
         initialization = cp.where(initialization == 0, 1e-10, initialization)
         initialization = initialization / cp.sum(initialization, keepdims=True, axis=0)
@@ -47,4 +46,4 @@ class GSS:
 
         posterior = affiliation.transpose(1, 2, 0)
 
-        return cp.asnumpy(posterior)
+        return posterior

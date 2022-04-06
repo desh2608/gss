@@ -27,6 +27,7 @@ setup(
         "cupy",
         "wpe @ git+http://github.com/desh2608/wpe",
         "cacgmm @ git+http://github.com/desh2608/cacgmm",
+        "beamformer @ git+http://github.com/desh2608/beamformer"
         "lhotse @ git+http://github.com/lhotse-speech/lhotse",
     ],
     include_dirs=[numpy.get_include()],

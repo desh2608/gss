@@ -3,6 +3,7 @@ from pathlib import Path
 import logging
 
 import numpy as np
+import cupy as cp
 import soundfile as sf
 
 from lhotse.utils import compute_num_samples
@@ -13,7 +14,7 @@ from gss.core import WPE, GSS, Beamformer, Activity
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d:%H:%M:%S",
-    level=logging.DEBUG,
+    level=logging.INFO,
 )
 
 
@@ -32,7 +33,6 @@ def get_enhancer(
     bss_iterations=20,
     bss_iterations_post=1,
     bf_drop_context=True,
-    bf="mvdrSouden_ban",
     postfilter=None,
     error_handling="ignore",
 ):
@@ -61,7 +61,6 @@ def get_enhancer(
         ),
         bf_drop_context=bf_drop_context,
         bf_block=Beamformer(
-            type=bf,
             postfilter=postfilter,
         ),
         stft_size=stft_size,
@@ -179,6 +178,8 @@ class Enhancer:
         logging.debug(f"Computing STFT")
         Obs = self.stft(obs)
 
+        Obs = cp.asarray(Obs)
+
         logging.debug(f"Applying WPE")
         if self.wpe_block is not None:
             Obs = self.wpe_block(Obs)
@@ -219,10 +220,7 @@ class Enhancer:
                 masks[:, -end_context_frames:, :] = 0
 
         target_mask = masks[speaker_id]
-        distortion_mask = np.sum(
-            np.delete(masks, speaker_id, axis=0),
-            axis=0,
-        )
+        distortion_mask = cp.sum(masks, axis=0) - target_mask
 
         logging.debug("Applying beamforming with computed masks")
         X_hat = self.bf_block(
@@ -230,6 +228,8 @@ class Enhancer:
             target_mask=target_mask,
             distortion_mask=distortion_mask,
         )
+
+        X_hat = cp.asnumpy(X_hat)
 
         logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)
