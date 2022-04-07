@@ -1,0 +1,75 @@
+#!/bin/bash
+# Author: Guanghui Qin
+# Report bugs to Guanghui Qin (via slack or gqin@jhu.edu)
+
+# It automatically detect the idle CUDA devices. If available, it locks one of them and append
+# the device number to the CUDA_VISIBLE_DEVICES variable.
+# A device is considered available if (1) no job is running on this device; (2) not locked.
+# Usage: (Suppose you need only one CUDA)
+# >>> source acquire-gpu
+# >>> # Your codes start here.
+# If you need more than 1 CUDA, simply use a for loop or repeat the script n times.
+# Suppose you need 3 CUDA devices:
+# >>> for _ in $(seq 3); do source acquire-gpu; done
+# Be sure to use `source` instead of `bash`
+
+# The mechanism of acquire-gpu is to associate every GPU with a file. A job locks the file if 
+# it needs to use that device, and release the lock when it exits, either normally or abnormally.
+
+# Copy this script to your local and remove this line if you don't want to be tracked.
+# [ -w /home/gqin2/.track/acquire-gpu.track ] && echo "$USER $(hostname) $(date +'%Y-%m-%d %H:%M:%S')" >> /home/gqin2/.track/acquire-gpu.track 
+
+# Create the lock folder if it doesn't exist.
+LOCK_DIR="$HOME/.lock"
+mkdir -p "$LOCK_DIR"
+if [ ! -f "$LOCK_DIR/master.lock" ]; then
+  touch "$LOCK_DIR/master.lock"
+fi
+# master lock is used to prevent racing between different programs running this script.
+exec {MASTER_FN}>"$LOCK_DIR/master.lock"
+flock -x $MASTER_FN
+
+N_GPU=$(nvidia-smi -L | wc -l)
+echo "Number of GPUs: $N_GPU"
+
+# Parse nvidia-smi to get available devices
+FREE_GPU=$(nvidia-smi | sed -e '1,/Processes/d' | tail -n+3 | head -n-1 | awk '{print $2}'\
+  | awk -v ng="$N_GPU" 'BEGIN{for (n=0;n<ng;++n){g[n] = 1}} {delete g[$1];} END{for (i in g) print i}')
+
+# For a device with no job running on, it's still possible that another job just claimed it but hasn't
+# occupied any GPU memory yet. This is very common when you submit multiple jobs simultineously.
+# For every available device reflected by `nvidia-smi`, the following for loop tries to (but not actually)
+# lock the device. If the device is already locked, then remove it from available list.
+for DEVICE_ID in $(seq 0 $(($N_GPU - 1))); do
+  TMP_LOCK="$LOCK_DIR/$(cat /etc/hostname).$DEVICE_ID.lock"
+  if [ ! -f "$TMP_LOCK" ]; then
+    touch "$TMP_LOCK"
+  fi
+  exec {TMP_FN}>"$TMP_LOCK"
+  if ! flock -xn $TMP_FN ; then
+    # echo "BUSY: $DEVICE_ID"
+    FREE_GPU=$(sed "/$DEVICE_ID/d" <<< "$FREE_GPU")
+  fi
+  exec {TMP_FN}>&-
+done
+
+echo "Free GPUs: " $FREE_GPU
+
+# Passing parameter to this script to indicate the number of GPUs is dangerous, which
+# might collide with the outside environment variable since we're sourcing this script.
+# I deprecated the method, and acquire exactly 1 device each time.
+SELECTED_DEVICES=$(head -n 1 <<< "$FREE_GPU")
+
+# Lock the device
+for DEVICE in $SELECTED_DEVICES; do
+  echo "Select device: $DEVICE"
+  LOCK="$LOCK_DIR/$(cat /etc/hostname).$DEVICE.lock"
+  touch "$LOCK"
+  exec {CUR_FN}> $LOCK
+  flock -x $CUR_FN
+  CUDA_VISIBLE_DEVICES+="$DEVICE,"
+done
+
+export CUDA_VISIBLE_DEVICES
+
+exec {MASTER_FN}>&-

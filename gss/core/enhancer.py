@@ -1,16 +1,9 @@
-"""
-
-Legend:
-n, N ... time
-t, T ... frame
-f, F ... frequency
-d, D ... channel
-a, A ... array
-"""
 from dataclasses import dataclass
+from pathlib import Path
 import logging
 
 import numpy as np
+import cupy as cp
 import soundfile as sf
 
 from lhotse.utils import compute_num_samples
@@ -40,7 +33,6 @@ def get_enhancer(
     bss_iterations=20,
     bss_iterations_post=1,
     bf_drop_context=True,
-    bf="mvdrSouden_ban",
     postfilter=None,
     error_handling="ignore",
 ):
@@ -69,7 +61,6 @@ def get_enhancer(
         ),
         bf_drop_context=bf_drop_context,
         bf_block=Beamformer(
-            type=bf,
             postfilter=postfilter,
         ),
         stft_size=stft_size,
@@ -132,35 +123,53 @@ class Enhancer:
         cuts_extended = cuts.extend_by(
             duration=self.context_duration, direction="both", preserve_id=True
         )
-        for id in cuts.ids:
+        for i, id in enumerate(cuts.ids):
             cut, cut_extended = cuts[id], cuts_extended[id]
             out_dir = exp_dir / cut.recording_id
             out_dir.mkdir(parents=True, exist_ok=True)
-            save_path = f"{cut.recording_id}-{cut.supervisions[0].speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
-            logging.info(
-                f"Enhancing cut {cut.id}: {cut.recording_id} ({cut.start}s to {cut.end}s), speaker {cut.supervisions[0].speaker}"
+            save_path = Path(
+                f"{cut.recording_id}-{cut.supervisions[0].speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
             )
-            try:
-                # Compute the speaker activity for the extended cut
-                cut_activity, spk_to_idx_map = self.activity.get_activity(
-                    cut.recording_id, cut_extended.start, cut_extended.duration
-                )
-                logging.debug(f"Computed speaker activity for cut")
+            logging.info(
+                f"Processing cut {i+1} ({cut.recording_id}, {cut.start}s - {cut.end}s, speaker {cut.supervisions[0].speaker}) of {len(cuts)}."
+            )
+            if (out_dir / save_path).exists():
+                logging.info(f"Skipping existing file {str(out_dir / save_path)}.")
+                continue
 
-                # Compute the enhanced signal using the extended cut and the activity
-                x_hat = self.enhance_cut(
-                    cut,
-                    cut_extended,
-                    cut_activity,
-                    spk_to_idx_map[cut.supervisions[0].speaker],
-                )
-            except Exception as e:
-                logging.exception(f"Error enhancing cut {cut.id}: {e}")
-                num_error += 1
-                if self.error_handling == "keep_original":
-                    # Keep the original signal (this function will only load channel 0)
-                    x_hat = cut.load_audio()
-                raise
+            # Sometimes the segment may be large and cause OOM issues in CuPy. If this
+            # happens, we increasingly chunk it up into smaller segments until it can
+            # be processed without breaking.
+            num_chunks = 1
+            while True:
+                try:
+                    # Compute the speaker activity for the extended cut
+                    cut_activity, spk_to_idx_map = self.activity.get_activity(
+                        cut.recording_id, cut_extended.start, cut_extended.duration
+                    )
+                    logging.debug(f"Computed speaker activity for cut")
+
+                    # Compute the enhanced signal using the extended cut and the activity
+                    x_hat = self.enhance_cut(
+                        cut,
+                        cut_extended,
+                        cut_activity,
+                        spk_to_idx_map[cut.supervisions[0].speaker],
+                        num_chunks=num_chunks,
+                    )
+                    break
+                except cp.cuda.memory.OutOfMemoryError:
+                    num_chunks = num_chunks + 1
+                    logging.warning(
+                        f"Out of memory error while processing cut {cut.id}. Trying again with {num_chunks} chunks."
+                    )
+                except Exception as e:
+                    logging.error(f"Error enhancing cut {cut.id}: {e}")
+                    num_error += 1
+                    if self.error_handling == "keep_original":
+                        # Keep the original signal (this function will only load channel 0)
+                        x_hat = cut.load_audio()
+                    break
 
             logging.debug("Saving enhanced signal")
             sf.write(
@@ -171,20 +180,13 @@ class Enhancer:
             )
         return num_error
 
-    def enhance_cut(self, cut, cut_extended, activity, speaker_id):
+    def enhance_cut(self, cut, cut_extended, activity, speaker_id, num_chunks=1):
 
         # We load from the recording so that we can load all channels
         logging.debug("Loading audio")
         obs = cut_extended.recording.load_audio(
             offset=cut_extended.start, duration=cut_extended.duration
         )
-
-        logging.debug(f"Computing STFT")
-        Obs = self.stft(obs)
-
-        logging.debug(f"Applying WPE")
-        if self.wpe_block is not None:
-            Obs = self.wpe_block(Obs)
 
         logging.debug(f"Converting activity to frequency domain")
         activity_freq = activity_time_to_frequency(
@@ -195,9 +197,28 @@ class Enhancer:
             stft_pad=True,
         )
 
-        logging.debug(f"Computing GSS masks")
-        masks = self.gss_block(Obs, activity_freq)
+        logging.debug(f"Computing STFT")
+        Obs = self.stft(obs)
 
+        D, T, F = Obs.shape
+
+        # Process observation in chunks
+        chunk_size = int(np.ceil(T / num_chunks))
+        masks = []
+        for i in range(num_chunks):
+            st = i * chunk_size
+            en = min(T, (i + 1) * chunk_size)
+            Obs_chunk = cp.asarray(Obs[:, st:en, :])
+
+            logging.debug(f"Applying WPE")
+            if self.wpe_block is not None:
+                Obs_chunk = self.wpe_block(Obs_chunk)
+
+            logging.debug(f"Computing GSS masks")
+            masks_chunk = self.gss_block(Obs_chunk, activity_freq[:, st:en])
+            masks.append(masks_chunk)
+
+        masks = cp.concatenate(masks, axis=1)
         orig_start = compute_num_samples(cut.start, self.sampling_rate)
         orig_end = compute_num_samples(cut.end, self.sampling_rate)
         new_start = compute_num_samples(cut_extended.start, self.sampling_rate)
@@ -222,17 +243,21 @@ class Enhancer:
                 masks[:, -end_context_frames:, :] = 0
 
         target_mask = masks[speaker_id]
-        distortion_mask = np.sum(
-            np.delete(masks, speaker_id, axis=0),
-            axis=0,
-        )
+        distortion_mask = cp.sum(masks, axis=0) - target_mask
 
         logging.debug("Applying beamforming with computed masks")
-        X_hat = self.bf_block(
-            Obs,
-            target_mask=target_mask,
-            distortion_mask=distortion_mask,
-        )
+        X_hat = []
+        for i in range(num_chunks):
+            st = i * chunk_size
+            en = min(T, (i + 1) * chunk_size)
+            X_hat_chunk = self.bf_block(
+                cp.asarray(Obs[:, st:en, :]),
+                target_mask=target_mask[st:en],
+                distortion_mask=distortion_mask[st:en],
+            )
+            X_hat.append(X_hat_chunk)
+
+        X_hat = cp.asnumpy(cp.concatenate(X_hat, axis=0))
 
         logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)
