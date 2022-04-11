@@ -24,10 +24,10 @@ setup(
     packages=find_packages(exclude=["contrib", "docs", "tests"]),  # Required
     install_requires=[
         "numpy",
-        "cupy",
-        "wpe @ git+http://github.com/desh2608/wpe",
-        "cacgmm @ git+http://github.com/desh2608/cacgmm",
-        "beamformer @ git+http://github.com/desh2608/beamformer"
+        "cupy-cuda102",
+        "wpe-gpu",
+        "cacgmm-gpu",
+        "beamformer-gpu",
         "lhotse @ git+http://github.com/lhotse-speech/lhotse",
     ],
     include_dirs=[numpy.get_include()],
