@@ -13,7 +13,8 @@ We have borrowed the main components of the tool from `pb_chime5` , but added GP
 porting most of the work to [CuPy](https://github.com/cupy/cupy).
 
 * The main components of the pipeline --- WPE, mask estimation with CACGMM, and beamforming --- are now
-built into their own packages: [WPE](https://github.com/desh2608/wpe), [CACGMM](https://github.com/desh2608/cacgmm), and [beamformer](https://github.com/desh2608/beamformer).
+built into their own packages: [WPE](https://github.com/desh2608/wpe), [CACGMM](https://github.com/desh2608/cacgmm), and [beamformer](https://github.com/desh2608/beamformer). The code is also
+directly included into this package for ease of installation.
 * The GSS implementation (see `gss/core`) has been stripped of CHiME-6 dataset-specific peculiarities
 (such as array naming conventions etc.)
 * We use Lhotse for simplified data loading, speaker activity generation, and RTTM representation. We provide
@@ -29,6 +30,14 @@ original CPU implementation.
 > git clone https://github.com/desh2608/gss.git & cd gss
 > pip install -e .
 ```
+
+One of the main requirements for this package is CuPy, which can be installed as:
+
+```bash
+> pip install cupy-cuda102
+```
+
+Please replace the above with the appropriate CUDA toolkit version that you have.
 
 ## Usage
 

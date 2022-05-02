@@ -3,11 +3,11 @@
 # Copyright 2022  Johns Hopkins University (Author: Desh Raj)
 # Apache 2.0
 #
-# This script prepares cut manifests for AMI data. An RTTM file is expected
+# This script prepares cut manifests for AliMeeting data. An RTTM file is expected
 # as input. If not provided, an oracle RTTM file is constructed based on the annotations.
 #
 # Usage:
-#   python scripts/prepare_ami.py -j 8 -r data/ami/rttm /export/data/amicorpus exp/
+#   python scripts/prepare_alimeeting.py -j 8 -r data/alimeeting/rttm /export/data/alimeeting exp/
 
 from pathlib import Path
 import argparse
@@ -20,9 +20,8 @@ from lhotse import (
     validate_recordings_and_supervisions,
     fix_manifests,
 )
-from lhotse.recipes import prepare_ami
+from lhotse.recipes import prepare_ali_meeting
 from lhotse.utils import fastcopy
-from matplotlib.pyplot import flag
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -56,12 +55,6 @@ def read_args():
         default=15.0,
         help="Chunk up longer segments to avoid OOM issues",
     )
-    parser.add_argument(
-        "--train-set",
-        action="store_true",
-        default=False,
-        help="Apply enhancement to the training set",
-    )
     args = parser.parse_args()
     return args
 
@@ -77,19 +70,9 @@ def main(args):
         cuts = load_manifest(exp_dir / "cuts.jsonl")
 
     else:
-        manifests = prepare_ami(
-            corpus_dir,
-            annotations_dir=corpus_dir / "ami_public_manual_1.6.2",
-            mic="mdm",
-            partition="full-corpus-asr",
-        )
+        manifests = prepare_ali_meeting(corpus_dir, mic="far")
 
-        if args.train_set:
-            recordings = manifests["train"]["recordings"]
-        else:
-            recordings = (
-                manifests["dev"]["recordings"] + manifests["test"]["recordings"]
-            )
+        recordings = manifests["eval"]["recordings"] + manifests["test"]["recordings"]
 
         if args.rttm_path:
             logger.info("Creating supervisions from RTTM file(s)")
@@ -98,12 +81,9 @@ def main(args):
             supervisions = SupervisionSet.from_rttm(rttm_files)
 
         else:
-            if args.train_set:
-                supervisions = manifests["train"]["supervisions"]
-            else:
-                supervisions = (
-                    manifests["dev"]["supervisions"] + manifests["test"]["supervisions"]
-                )
+            supervisions = (
+                manifests["eval"]["supervisions"] + manifests["test"]["supervisions"]
+            )
 
         channels = set(s.channel for s in supervisions)
         assert len(channels) == 1, "Only one channel is supported"
@@ -111,8 +91,8 @@ def main(args):
 
         # Remove very short segments
         supervisions = supervisions.filter(
-            lambda s: s.duration >= args.min_segment_length
-        )
+            lambda s: s.duration > args.min_segment_length
+        ).to_eager()
 
         recordings, supervisions = fix_manifests(recordings, supervisions)
         validate_recordings_and_supervisions(recordings, supervisions)

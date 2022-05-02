@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from beamformer import beamform_mvdr
+from gss.beamformer import beamform_mvdr
 
 
 @dataclass

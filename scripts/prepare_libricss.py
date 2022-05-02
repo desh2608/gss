@@ -88,7 +88,7 @@ def main(args):
         channel = channels.pop()
 
         supervisions = supervisions.filter(
-            lambda s: s.duration >= args.min_segment_length
+            lambda s: s.duration > args.min_segment_length
         )
 
         recordings, supervisions = fix_manifests(recordings, supervisions)

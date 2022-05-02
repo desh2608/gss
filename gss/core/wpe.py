@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from wpe import wpe
+from gss.wpe import wpe
 
 
 @dataclass
