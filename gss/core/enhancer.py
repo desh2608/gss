@@ -35,6 +35,7 @@ def get_enhancer(
     bf_drop_context=True,
     postfilter=None,
     error_handling="ignore",
+    num_channels=None,
 ):
     assert wpe is True or wpe is False, wpe
     assert len(cuts) > 0
@@ -67,6 +68,7 @@ def get_enhancer(
         stft_shift=stft_shift,
         stft_fading=stft_fading,
         sampling_rate=sampling_rate,
+        num_channels=num_channels,
         error_handling=error_handling,
     )
 
@@ -91,6 +93,7 @@ class Enhancer:
 
     context_duration: float  # e.g. 15
     sampling_rate: int
+    num_channels: int
 
     error_handling: str = "ignore"
 
@@ -126,6 +129,11 @@ class Enhancer:
         for i, id in enumerate(cuts.ids):
             cut, cut_extended = cuts[id], cuts_extended[id]
             out_dir = exp_dir / cut.recording_id
+
+            if cut.recording_id == "TS3009d":
+                # some issue with this recording
+                continue
+
             out_dir.mkdir(parents=True, exist_ok=True)
             save_path = Path(
                 f"{cut.recording_id}-{cut.supervisions[0].speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
@@ -170,7 +178,6 @@ class Enhancer:
                         # Keep the original signal (this function will only load channel 0)
                         x_hat = cut.load_audio()
                     break
-
             logging.debug("Saving enhanced signal")
             sf.write(
                 file=str(out_dir / save_path),
@@ -187,6 +194,9 @@ class Enhancer:
         obs = cut_extended.recording.load_audio(
             offset=cut_extended.start, duration=cut_extended.duration
         )
+        if self.num_channels is not None:
+            N = min(self.num_channels, obs.shape[0])
+            obs = obs[:N, :]
 
         logging.debug(f"Converting activity to frequency domain")
         activity_freq = activity_time_to_frequency(

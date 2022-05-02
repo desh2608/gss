@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import cupy as cp
 
-from cacgmm.cacgmm_trainer import CACGMMTrainer
+from gss.cacgmm import CACGMMTrainer
 
 
 @dataclass

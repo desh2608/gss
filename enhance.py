@@ -33,6 +33,12 @@ def read_args():
     parser.add_argument(
         "--out-dir", type=str, help="Path to write enhanced audio files"
     )
+    parser.add_argument(
+        "--num-channels",
+        type=int,
+        default=None,
+        help="Number of channels to use (use all by default)",
+    )
     args = parser.parse_args()
     return args
 
@@ -51,6 +57,7 @@ def main(args):
         error_handling="keep_original",
         activity_garbage_class=False,
         bss_iterations=10,
+        num_channels=args.num_channels,
     )
 
     logger.info(f"Enhancing {len(cuts_split)} segments")
