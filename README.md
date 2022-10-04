@@ -19,7 +19,7 @@ directly included into this package for ease of installation.
 (such as array naming conventions etc.)
 * We use Lhotse for simplified data loading, speaker activity generation, and RTTM representation. We provide
 examples in the `scripts` directory for how to use the `gss` module for several datasets. We
-are currently aiming to support LibriCSS, AMI, and AISHELL-4.
+are currently aiming to support LibriCSS, AMI, and AliMeeting.
 * The inference can be done on multi-node GPU environment. This makes it several times faster than the 
 original CPU implementation.
 
