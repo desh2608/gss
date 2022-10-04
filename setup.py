@@ -23,6 +23,7 @@ setup(
     keywords="speech enhancement gss",  # Optional
     packages=find_packages(exclude=["contrib", "docs", "tests"]),  # Required
     install_requires=[
+        "cached_property",
         "numpy",
         "lhotse @ git+http://github.com/lhotse-speech/lhotse",
     ],
