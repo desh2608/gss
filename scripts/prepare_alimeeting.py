@@ -79,28 +79,27 @@ def main(args):
             rttm_path = Path(args.rttm_path)
             rttm_files = rttm_path if rttm_path.is_file() else rttm_path.rglob("*.rttm")
             supervisions = SupervisionSet.from_rttm(rttm_files)
+            # Supervisions obtained from RTTM files are single-channel only, so we modify the
+            # ``channel`` field to share it for all channels.
+            supervisions = SupervisionSet.from_segments(
+                [fastcopy(s, channel=list(range(8))) for s in supervisions]
+            )
 
         else:
             supervisions = (
                 manifests["eval"]["supervisions"] + manifests["test"]["supervisions"]
             )
 
-        channels = set(s.channel for s in supervisions)
-        assert len(channels) == 1, "Only one channel is supported"
-        channel = channels.pop()
-
         # Remove very short segments
         supervisions = supervisions.filter(
             lambda s: s.duration > args.min_segment_length
-        ).to_eager()
+        )
 
         recordings, supervisions = fix_manifests(recordings, supervisions)
         validate_recordings_and_supervisions(recordings, supervisions)
 
         logger.info("Creating CutSet")
         cuts = CutSet.from_manifests(recordings=recordings, supervisions=supervisions)
-        # Only keep the cuts with channel id 0, since we only have supervisions for those
-        cuts = cuts.filter(lambda c: c.channel == channel)
         # Now we change the cut ids to be the same as the corresponding recording id
         cuts = CutSet.from_cuts(fastcopy(c, id=c.recording_id) for c in cuts)
         # At this point, there is 1 cut per recording.

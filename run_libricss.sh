@@ -9,7 +9,7 @@ affix="_${rttm_tag}"
 . ./path.sh
 . parse_options.sh
 
-CORPUS_DIR=/export/c01/corpora6/LibriCSS
+CORPUS_DIR=/export/fs01/LibriCSS
 DATA_DIR=data/libricss
 EXP_DIR=exp/libricss${affix}
 
