@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import cupy as cp
 import soundfile as sf
+import torch
 
 from lhotse.utils import compute_num_samples
 
@@ -124,15 +125,14 @@ class Enhancer:
         num_error = 0
         # Get cuts with extended context
         cuts_extended = cuts.extend_by(
-            duration=self.context_duration, direction="both", preserve_id=True
+            duration=self.context_duration,
+            direction="both",
+            preserve_id=True,
+            pad_silence=False,
         )
         for i, id in enumerate(cuts.ids):
             cut, cut_extended = cuts[id], cuts_extended[id]
             out_dir = exp_dir / cut.recording_id
-
-            if cut.recording_id == "TS3009d":
-                # some issue with this recording
-                continue
 
             out_dir.mkdir(parents=True, exist_ok=True)
             save_path = Path(
@@ -175,8 +175,8 @@ class Enhancer:
                     logging.error(f"Error enhancing cut {cut.id}: {e}")
                     num_error += 1
                     if self.error_handling == "keep_original":
-                        # Keep the original signal (this function will only load channel 0)
-                        x_hat = cut.load_audio()
+                        # Keep the original signal (only load channel 0)
+                        x_hat = cut.load_audio(channel=0)
                     break
             logging.debug("Saving enhanced signal")
             sf.write(
@@ -189,14 +189,10 @@ class Enhancer:
 
     def enhance_cut(self, cut, cut_extended, activity, speaker_id, num_chunks=1):
 
-        # We load from the recording so that we can load all channels
         logging.debug("Loading audio")
-        obs = cut_extended.recording.load_audio(
-            offset=cut_extended.start, duration=cut_extended.duration
+        obs = cut_extended.load_audio(
+            channel=list(range(self.num_channels)) if self.num_channels else None,
         )
-        if self.num_channels is not None:
-            N = min(self.num_channels, obs.shape[0])
-            obs = obs[:N, :]
 
         logging.debug(f"Converting activity to frequency domain")
         activity_freq = activity_time_to_frequency(
