@@ -29,6 +29,7 @@ original CPU implementation.
 > conda create -n gss python=3.7
 > git clone https://github.com/desh2608/gss.git & cd gss
 > pip install -e .
+> pre-commit install # installs pre-commit hooks with style checks
 ```
 
 One of the main requirements for this package is CuPy, which can be installed as:
@@ -79,6 +80,15 @@ of 15s in most cases.
 
 Internally, we also have a fallback option to chunk up segments into increasingly smaller
 parts in case OOM error is encountered (see `gss.core.enhancer.py` ).
+
+## Contributing
+
+Contributions for core improvements or new recipes are welcome. Please run the following
+before creating a pull request.
+
+```bash
+> pre-commit run # Running linter checks
+```
 
 ## Citations
 

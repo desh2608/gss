@@ -11,6 +11,13 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
+dev_requires = [
+    "flake8==5.0.4",
+    "black==22.3.0",
+    "isort==5.10.1",
+    "pre-commit>=2.17.0,<=2.19.0",
+]
+
 setup(
     name="gss",
     version="0.3.0",
@@ -27,5 +34,8 @@ setup(
         "numpy",
         "lhotse @ git+http://github.com/lhotse-speech/lhotse",
     ],
+    extras_require={
+        "dev": dev_requires,
+    },
     include_dirs=[numpy.get_include()],
 )
