@@ -13,11 +13,11 @@
 # >>> for _ in $(seq 3); do source acquire-gpu; done
 # Be sure to use `source` instead of `bash`
 
-# The mechanism of acquire-gpu is to associate every GPU with a file. A job locks the file if 
+# The mechanism of acquire-gpu is to associate every GPU with a file. A job locks the file if
 # it needs to use that device, and release the lock when it exits, either normally or abnormally.
 
 # Copy this script to your local and remove this line if you don't want to be tracked.
-# [ -w /home/gqin2/.track/acquire-gpu.track ] && echo "$USER $(hostname) $(date +'%Y-%m-%d %H:%M:%S')" >> /home/gqin2/.track/acquire-gpu.track 
+# [ -w /home/gqin2/.track/acquire-gpu.track ] && echo "$USER $(hostname) $(date +'%Y-%m-%d %H:%M:%S')" >> /home/gqin2/.track/acquire-gpu.track
 
 # Create the lock folder if it doesn't exist.
 LOCK_DIR="$HOME/.lock"
