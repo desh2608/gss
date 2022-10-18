@@ -4,6 +4,7 @@
 from operator import xor
 
 import cupy as cp
+
 from gss.cacgmm.cacg_trainer import ComplexAngularCentralGaussianTrainer
 from gss.cacgmm.cacgmm import CACGMM
 from gss.cacgmm.utils import estimate_mixture_weight, normalize_observation

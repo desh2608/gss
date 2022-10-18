@@ -4,6 +4,7 @@
 from dataclasses import dataclass, field
 
 import cupy as cp
+
 from gss.cacgmm.cacg import ComplexAngularCentralGaussian
 from gss.cacgmm.utils import log_pdf_to_affiliation, normalize_observation
 

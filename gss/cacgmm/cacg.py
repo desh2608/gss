@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import cupy as cp
 
-from gss.cacgmm.utils import normalize_observation, is_broadcast_compatible
+from gss.cacgmm.utils import is_broadcast_compatible, normalize_observation
 
 
 @dataclass
