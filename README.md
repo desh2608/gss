@@ -1,16 +1,16 @@
-# Guided Source Separation with GPU
-
-**NOTE:** Originally this repository was supposed to be a simplified version of [pb_chime5](https://github.com/fgnt/pb_chime5/tree/master/pb_chime5) toolkit from Paderborn University, but after several modifications,
-it is almost its own codebase, although we still keep it as a fork to honor the original purpose.
+<h1 align="center">GPU-accelerated Guided Source Separation</h1>
 
 **Guided source separation** is a type of blind source separation (blind = no training required)
 in which the mask estimation is guided by a diarizer output. The original method was proposed
-for the CHiME-5 challenge in [this paper](http://spandh.dcs.shef.ac.uk/chime_workshop/papers/CHiME_2018_paper_boeddecker.pdf).
+for the CHiME-5 challenge in [this paper](http://spandh.dcs.shef.ac.uk/chime_workshop/papers/CHiME_2018_paper_boeddecker.pdf) by Boeddeker et al.
+
+This repository contains a GPU implementation of this method in Python, along with CLI binaries
+to run the enhancement from shell. We also provide several example "recipes" for using the
+method.
 
 ## Features
 
-We have borrowed the main components of the tool from `pb_chime5` , but added GPU support by
-porting most of the work to [CuPy](https://github.com/cupy/cupy).
+The core components of the tool are borrowed from [ `pb_chime5` ](https://github.com/fgnt/pb_chime5), but GPU support is added by porting most of the work to [CuPy](https://github.com/cupy/cupy).
 
 * The main components of the pipeline --- WPE, mask estimation with CACGMM, and beamforming --- are now
 built into their own packages: [WPE](https://github.com/desh2608/wpe), [CACGMM](https://github.com/desh2608/cacgmm), and [beamformer](https://github.com/desh2608/beamformer). The code is also
@@ -18,10 +18,12 @@ directly included into this package for ease of installation.
 * The GSS implementation (see `gss/core`) has been stripped of CHiME-6 dataset-specific peculiarities
 (such as array naming conventions etc.)
 * We use Lhotse for simplified data loading, speaker activity generation, and RTTM representation. We provide
-examples in the `scripts` directory for how to use the `gss` module for several datasets. We
+examples in the `recipes` directory for how to use the `gss` module for several datasets. We
 are currently aiming to support LibriCSS, AMI, and AliMeeting.
 * The inference can be done on multi-node GPU environment. This makes it several times faster than the
 original CPU implementation.
+* We provide both Python modules and CLI for using the enhancement functions, which can be
+easily included in recipes from Kaldi, Icefall, ESPNet, etc.
 
 ## Installation
 
@@ -56,33 +58,30 @@ pip install cupy-cuda102
 
 ## Usage
 
-Enhancing any dataset using this tool consists of 2 parts - "prepare" and "enhance" (see
-the `run_ami.sh` script for an example).
+See the `recipes` directory for usage examples. The main stages are as follows:
 
-In the "prepare" stage, we use Lhotse to create a manifest for the data describing the
-cuts (which are the individual segments to be enhanced). At this step, you can also pass
-RTTM files to define the segments. We also optionally split the cut set into multiple parts.
-Each of these parts will be enhanced on 1 GPU.
+1. Prepare Lhotse manifests. See [this list](https://lhotse.readthedocs.io/en/latest/corpus.html#standard-data-preparation-recipes) of corpora currently supported in Lhotse.
+You can also apply GSS on your own dataset by preparing it as Lhotse manifests.
 
-In the enhancement stage (see enhance.py), each cut (segment) is processed 1 at a time on
-a GPU. After the processing is complete (it may take a while if the RTTM file has a lot of segments),
-the enhanced wav files will be written to `EXP_DIR` . The wav files are named
-as *recoid-spkid-start_end.wav*, i.e., 1 wav file is generated for each segment in the RTTM.
-The "start" and "end" are padded to 6 digits, for example: 21.18 seconds is encoded as
-`002118` . This convention should be fine if your audio duration is under ~2.75 h (9999s),
-otherwise, you should change the padding in `gss/core/enhancer.py` .
+2. If you are using an RTTM file to get segments (e.g. in CHiME-6 Track 2), convert the RTTMs
+to Lhotse-style supervision manifest.
 
-For examples of how to generate RTTMs for guiding the separation, please refer to my
-[diarizer](https://github.com/desh2608/diarizer) toolkit.
+3. Create recording-level cut sets by combining the recording with its supervisions. These
+will be used to get speaker activities.
 
-### How to prepare a new dataset for enhancement
+4. Trim the recording-level cut set into segment-level cuts. These are the segments that will
+actually be enhanced.
 
-If you want to perform enhancement on a new dataset, the important part is to create a
-new `prepare_data.py` script in the `scripts` directory, similar to the existing ones.
-These data preparation scripts heavily rely on Lhotse manifest preparation. You can find
-a the list of existing Lhotse recipes [here](https://lhotse.readthedocs.io/en/latest/corpus.html#standard-data-preparation-recipes).
+5. Split the segments into as many parts as the number of GPU jobs you want to run. In the
+recipes, we submit the jobs through `qsub` , similar to Kaldi or ESPNet recipes. You can
+use the parallelization in those toolkits to additionally use a different scheduler such as
+SLURM.
 
-Additionally, we recommend the scripts to contain the following arguments:
+6. Run the enhancement on GPUs. The following options can be provided:
+
+* `--num-channels`: Number of channels to use for enhancement. By default, all channels are used.
+
+* `--bss-iteration`: Number of iterations of the CACGMM inference.
 
 * `--min-segment-length`: Any segment shorter than this value will be removed. This is
 particularly useful when using segments from a diarizer output since they often contain
@@ -95,13 +94,23 @@ of 15s in most cases.
 Internally, we also have a fallback option to chunk up segments into increasingly smaller
 parts in case OOM error is encountered (see `gss.core.enhancer.py` ).
 
+The enhanced wav files will be written to `$EXP_DIR/enhanced` . The wav files are named
+as *recoid-spkid-start_end.wav*, i.e., 1 wav file is generated for each segment in the RTTM.
+The "start" and "end" are padded to 6 digits, for example: 21.18 seconds is encoded as
+`002118` . This convention should be fine if your audio duration is under ~2.75 h (9999s),
+otherwise, you should change the padding in `gss/core/enhancer.py` .
+
+For examples of how to generate RTTMs for guiding the separation, please refer to my
+[diarizer](https://github.com/desh2608/diarizer) toolkit.
+
 ## Contributing
 
 Contributions for core improvements or new recipes are welcome. Please run the following
 before creating a pull request.
 
 ```bash
-> pre-commit run # Running linter checks
+pre-commit install
+pre-commit run # Running linter checks
 ```
 
 ## Citations
