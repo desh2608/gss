@@ -1,16 +1,15 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-import logging
 
-import numpy as np
 import cupy as cp
+import numpy as np
 import soundfile as sf
 import torch
-
 from lhotse.utils import compute_num_samples
 
+from gss.core import GSS, WPE, Activity, Beamformer
 from gss.utils.data_utils import activity_time_to_frequency, start_end_context_frames
-from gss.core import WPE, GSS, Beamformer, Activity
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",

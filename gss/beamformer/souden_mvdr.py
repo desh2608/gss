@@ -1,14 +1,13 @@
 import cupy as cp
-
 from cached_property import cached_property
 
-from gss.beamformer.utils import morph
 from gss.beamformer.beamform import (
-    get_power_spectral_density_matrix,
-    get_mvdr_vector_souden,
-    blind_analytic_normalization,
     apply_beamforming_vector,
+    blind_analytic_normalization,
+    get_mvdr_vector_souden,
+    get_power_spectral_density_matrix,
 )
+from gss.beamformer.utils import morph
 
 # The _Beamformer class is modified from:
 # https://github.com/fgnt/pb_chime5/blob/master/pb_chime5/speech_enhancement/beamforming_wrapper.py

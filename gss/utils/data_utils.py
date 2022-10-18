@@ -3,7 +3,9 @@ import numpy as np
 from gss.utils.numpy_utils import segment_axis
 
 
-def start_end_context_frames(start_context_samples, end_context_samples, stft_size, stft_shift, stft_fading):
+def start_end_context_frames(
+    start_context_samples, end_context_samples, stft_size, stft_shift, stft_fading
+):
     assert start_context_samples >= 0
     assert end_context_samples >= 0
 
@@ -87,5 +89,3 @@ def activity_time_to_frequency(
         shift=stft_shift,
         end="pad" if stft_pad else "cut",
     ).any(axis=-1)
-
-                

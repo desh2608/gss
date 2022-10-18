@@ -1,19 +1,35 @@
-from setuptools import setup, find_packages
-
 # To use a consistent encoding
 from codecs import open
 from os import path
+
 import numpy
+from setuptools import find_packages, setup
 
 here = path.abspath(path.dirname(__file__))
+
+# First check if cupy is installed
+try:
+    import cupy
+except ImportError:
+    raise RuntimeError(
+        "CuPy is not available. Please install it manually: "
+        "https://docs.cupy.dev/en/stable/install.html"
+    )
 
 # Get the long description from the README file
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_description = f.read()
 
+dev_requires = [
+    "flake8==5.0.4",
+    "black==22.3.0",
+    "isort==5.10.1",
+    "pre-commit>=2.17.0,<=2.19.0",
+]
+
 setup(
     name="gss",
-    version="0.3.1",
+    version="0.4.0",
     description="Guided Source Separation (based on pb_chime5)",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -28,5 +44,13 @@ setup(
         "numpy",
         "lhotse @ git+http://github.com/lhotse-speech/lhotse",
     ],
+    extras_require={
+        "dev": dev_requires,
+    },
     include_dirs=[numpy.get_include()],
+    entry_points={
+        "console_scripts": [
+            "gss=gss.bin.gss:cli",
+        ]
+    },
 )

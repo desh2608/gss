@@ -1,6 +1,6 @@
 # Guided Source Separation with GPU
 
-**NOTE:** Originally this repository was supposed to be a simplified version of [pb_chime5](https://github.com/fgnt/pb_chime5/tree/master/pb_chime5) toolkit from Paderborn University, but after several modifications, 
+**NOTE:** Originally this repository was supposed to be a simplified version of [pb_chime5](https://github.com/fgnt/pb_chime5/tree/master/pb_chime5) toolkit from Paderborn University, but after several modifications,
 it is almost its own codebase, although we still keep it as a fork to honor the original purpose.
 
 **Guided source separation** is a type of blind source separation (blind = no training required)
@@ -9,7 +9,7 @@ for the CHiME-5 challenge in [this paper](http://spandh.dcs.shef.ac.uk/chime_wor
 
 ## Features
 
-We have borrowed the main components of the tool from `pb_chime5` , but added GPU support by 
+We have borrowed the main components of the tool from `pb_chime5` , but added GPU support by
 porting most of the work to [CuPy](https://github.com/cupy/cupy).
 
 * The main components of the pipeline --- WPE, mask estimation with CACGMM, and beamforming --- are now
@@ -20,24 +20,39 @@ directly included into this package for ease of installation.
 * We use Lhotse for simplified data loading, speaker activity generation, and RTTM representation. We provide
 examples in the `scripts` directory for how to use the `gss` module for several datasets. We
 are currently aiming to support LibriCSS, AMI, and AliMeeting.
-* The inference can be done on multi-node GPU environment. This makes it several times faster than the 
+* The inference can be done on multi-node GPU environment. This makes it several times faster than the
 original CPU implementation.
 
 ## Installation
 
+### Preparing to install
+
+Create a new Conda environment:
+
 ```bash
-> conda create -n gss python=3.7
+conda create -n gss python=3.8
+```
+
+Install CuPy as follows (see https://docs.cupy.dev/en/stable/install.html for the appropriate version
+for your CUDA).
+
+```bash
+pip install cupy-cuda102
+```
+
+### Install (basic)
+
+```bash
+> pip install git+http://github.com/desh2608/gss
+```
+
+### Install (advanced)
+
+```bash
 > git clone https://github.com/desh2608/gss.git & cd gss
-> pip install -e .
+> pip install -e '.[dev]'
+> pre-commit install # installs pre-commit hooks with style checks
 ```
-
-One of the main requirements for this package is CuPy, which can be installed as:
-
-```bash
-> pip install cupy-cuda102
-```
-
-Please replace the above with the appropriate CUDA toolkit version that you have.
 
 ## Usage
 
@@ -46,15 +61,15 @@ the `run_ami.sh` script for an example).
 
 In the "prepare" stage, we use Lhotse to create a manifest for the data describing the
 cuts (which are the individual segments to be enhanced). At this step, you can also pass
-RTTM files to define the segments. We also optionally split the cut set into multiple parts. 
+RTTM files to define the segments. We also optionally split the cut set into multiple parts.
 Each of these parts will be enhanced on 1 GPU.
 
 In the enhancement stage (see enhance.py), each cut (segment) is processed 1 at a time on
-a GPU. After the processing is complete (it may take a while if the RTTM file has a lot of segments), 
+a GPU. After the processing is complete (it may take a while if the RTTM file has a lot of segments),
 the enhanced wav files will be written to `EXP_DIR` . The wav files are named
 as *recoid-spkid-start_end.wav*, i.e., 1 wav file is generated for each segment in the RTTM.
 The "start" and "end" are padded to 6 digits, for example: 21.18 seconds is encoded as
-`002118` . This convention should be fine if your audio duration is under ~2.75 h (9999s), 
+`002118` . This convention should be fine if your audio duration is under ~2.75 h (9999s),
 otherwise, you should change the padding in `gss/core/enhancer.py` .
 
 For examples of how to generate RTTMs for guiding the separation, please refer to my
@@ -69,16 +84,25 @@ a the list of existing Lhotse recipes [here](https://lhotse.readthedocs.io/en/la
 
 Additionally, we recommend the scripts to contain the following arguments:
 
-* `--min-segment-length`: Any segment shorter than this value will be removed. This is 
+* `--min-segment-length`: Any segment shorter than this value will be removed. This is
 particularly useful when using segments from a diarizer output since they often contain
 very small segments which are not relevant for ASR. A recommended setting is 0.2s.
 
-* `--max-segment-length`: Segments longer than this value will be chunked up. This is 
+* `--max-segment-length`: Segments longer than this value will be chunked up. This is
 to prevent OOM errors since the segment STFTs are loaded onto the GPU. We use a setting
 of 15s in most cases.
 
 Internally, we also have a fallback option to chunk up segments into increasingly smaller
 parts in case OOM error is encountered (see `gss.core.enhancer.py` ).
+
+## Contributing
+
+Contributions for core improvements or new recipes are welcome. Please run the following
+before creating a pull request.
+
+```bash
+> pre-commit run # Running linter checks
+```
 
 ## Citations
 

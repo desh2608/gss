@@ -110,3 +110,5 @@ venv.bak/
 dask-worker-space/
 exp/
 data/
+egs/*/data
+egs/*/exp

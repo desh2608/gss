@@ -3,9 +3,9 @@
 
 import functools
 import operator
+
 import cupy as cp
 import numpy as np
-
 
 __all__ = [
     "get_power_spectral_density_matrix",

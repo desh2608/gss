@@ -1,8 +1,7 @@
 from dataclasses import dataclass
 
-from lhotse import CutSet
-
 import numpy as np
+from lhotse import CutSet
 
 
 @dataclass  # (hash=True)
