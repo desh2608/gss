@@ -130,11 +130,18 @@ def cuts_(
     "enhanced_dir",
     type=click.Path(),
 )
-# @common_options
+@click.option(
+    "--recording-id",
+    type=str,
+    default=None,
+    help="Name of recording (will be used to get corresponding segments from RTTM)",
+)
+@common_options
 def recording_(
     recording,
     rttm,
     enhanced_dir,
+    recording_id,
     num_channels,
     bss_iterations,
     min_segment_length,
@@ -147,21 +154,24 @@ def recording_(
         RTTM: Path to an RTTM file containing speech activity
         ENHANCED_DIR: Output directory for enhanced audio files
     """
-    from lhotse import CutSet, Recording, RecordingSet, SupervisionSet
+    from lhotse import CutSet, Recording, SupervisionSet
     from lhotse.utils import fastcopy
 
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)
 
-    recordings = RecordingSet.from_recordings(Recording.from_file(recording))
-    supervisions = SupervisionSet.from_rttm(rttm)
+    cut = Recording.from_file(recording, recording_id=recording_id).to_cut()
+    supervisions = SupervisionSet.from_rttm(rttm).filter(
+        lambda s: s.recording_id == cut.id
+    )
     # Modify channel IDs to match the recording
     supervisions = SupervisionSet.from_segments(
-        fastcopy(s, channel=recording.channel_ids) for s in supervisions
+        fastcopy(s, channel=cut.channel) for s in supervisions
     )
+    cut.supervisions = supervisions
 
     # Create a cuts manifest with a single cut for the recording
-    cuts = CutSet.from_manifests(recordings=recordings, supervisions=supervisions)
+    cuts = CutSet.from_cuts([cut])
 
     # Create segment-wise cuts
     cuts_per_segment = cuts.trim_to_supervisions(keep_overlapping=False)
