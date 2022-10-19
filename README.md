@@ -45,18 +45,32 @@ pip install cupy-cuda102
 ### Install (basic)
 
 ```bash
-> pip install git+http://github.com/desh2608/gss
+pip install git+http://github.com/desh2608/gss
 ```
 
 ### Install (advanced)
 
 ```bash
-> git clone https://github.com/desh2608/gss.git & cd gss
-> pip install -e '.[dev]'
-> pre-commit install # installs pre-commit hooks with style checks
+git clone https://github.com/desh2608/gss.git & cd gss
+pip install -e '.[dev]'
+pre-commit install # installs pre-commit hooks with style checks
 ```
 
 ## Usage
+
+### Enhancing a single recording
+
+For the simple case of target-speaker extraction given a multi-channel recording and an
+RTTM file denoting speaker segments, run the following:
+
+```bash
+export CUDA_VISIBLE_DEVICES=0
+gss enhance recording \
+  /path/to/sessionA.wav /path/to/rttm exp/enhanced_segs \
+  --recording-id sessionA --min-segment-length 0.2 --max-segment-length 10.0
+```
+
+### Enhancing a corpus
 
 See the `recipes` directory for usage examples. The main stages are as follows:
 
