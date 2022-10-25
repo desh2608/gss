@@ -3,6 +3,8 @@ import logging
 from pathlib import Path
 
 import click
+from lhotse import CutSet, Recording, SupervisionSet, load_manifest
+from lhotse.utils import fastcopy
 
 from gss.bin.modes.cli_base import cli
 from gss.core.enhancer import get_enhancer
@@ -51,6 +53,34 @@ def common_options(func):
         help="Chunk up longer segments to avoid OOM issues",
         show_default=True,
     )
+    @click.option(
+        "--context-duration",
+        type=float,
+        default=15.0,
+        help="Context duration in seconds for CACGMM",
+        show_default=True,
+    )
+    @click.option(
+        "--max-batch-duration",
+        type=float,
+        default=20.0,
+        help="Maximum duration of a batch in seconds",
+        show_default=True,
+    )
+    @click.option(
+        "--max-batch-cuts",
+        type=int,
+        default=None,
+        help="Maximum number of cuts in a batch",
+        show_default=True,
+    )
+    @click.option(
+        "--num-buckets",
+        type=int,
+        default=2,
+        help="Number of buckets per speaker for batching (use larger values if you set higer max-segment-length)",
+        show_default=True,
+    )
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -80,6 +110,10 @@ def cuts_(
     bss_iterations,
     min_segment_length,
     max_segment_length,
+    context_duration,
+    max_batch_duration,
+    max_batch_cuts,
+    num_buckets,
 ):
     """
     Enhance segments (represented by cuts).
@@ -88,20 +122,23 @@ def cuts_(
         CUTS_PER_SEGMENT: Lhotse cuts manifest containing cuts per segment (e.g. obtained using `trim-to-supervisions`)
         ENHANCED_DIR: Output directory for enhanced audio files
     """
-    from lhotse import load_manifest
-
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)
 
     cuts = load_manifest(cuts_per_recording)
     cuts_per_segment = load_manifest(cuts_per_segment)
 
+    if num_channels is not None:
+        cuts = CutSet.from_cuts(
+            fastcopy(cut, channel=list(range(num_channels))) for cut in cuts
+        )
+    # Paranoia mode: ensure that cuts_per_recording have ids same as the recording_id
+    cuts = CutSet.from_cuts(cut.with_id(cut.recording_id) for cut in cuts)
+
     logger.info("Aplying min/max segment length constraints")
-    cuts_per_segment = (
-        cuts_per_segment.filter(lambda c: c.duration > min_segment_length)
-        .cut_into_windows(duration=max_segment_length)
-        .to_eager()
-    )
+    cuts_per_segment = cuts_per_segment.filter(
+        lambda c: c.duration > min_segment_length
+    ).cut_into_windows(duration=max_segment_length)
 
     logger.info("Initializing GSS enhancer")
     enhancer = get_enhancer(
@@ -109,10 +146,13 @@ def cuts_(
         error_handling="keep_original",
         activity_garbage_class=False,
         bss_iterations=bss_iterations,
-        num_channels=num_channels,
+        context_duration=context_duration,
+        max_batch_duration=max_batch_duration,
+        max_batch_cuts=max_batch_cuts,
+        num_buckets=num_buckets,
     )
 
-    logger.info(f"Enhancing {len(cuts_per_segment)} segments")
+    logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")
     num_errors = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
     logger.info(f"Finished with {num_errors} errors")
 
@@ -146,6 +186,10 @@ def recording_(
     bss_iterations,
     min_segment_length,
     max_segment_length,
+    context_duration,
+    max_batch_duration,
+    max_batch_cuts,
+    num_buckets,
 ):
     """
     Enhance a single recording using an RTTM file.
@@ -154,13 +198,14 @@ def recording_(
         RTTM: Path to an RTTM file containing speech activity
         ENHANCED_DIR: Output directory for enhanced audio files
     """
-    from lhotse import CutSet, Recording, SupervisionSet
-    from lhotse.utils import fastcopy
 
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)
 
     cut = Recording.from_file(recording, recording_id=recording_id).to_cut()
+    if num_channels is not None:
+        cut = fastcopy(cut, channel=list(range(num_channels)))
+
     supervisions = SupervisionSet.from_rttm(rttm).filter(
         lambda s: s.recording_id == cut.id
     )
@@ -174,14 +219,14 @@ def recording_(
     cuts = CutSet.from_cuts([cut])
 
     # Create segment-wise cuts
-    cuts_per_segment = cuts.trim_to_supervisions(keep_overlapping=False)
+    cuts_per_segment = cuts.trim_to_supervisions(
+        keep_overlapping=False, keep_all_channels=True
+    )
 
     logger.info("Aplying min/max segment length constraints")
-    cuts_per_segment = (
-        cuts_per_segment.filter(lambda c: c.duration > min_segment_length)
-        .cut_into_windows(duration=max_segment_length)
-        .to_eager()
-    )
+    cuts_per_segment = cuts_per_segment.filter(
+        lambda c: c.duration > min_segment_length
+    ).cut_into_windows(duration=max_segment_length)
 
     logger.info("Initializing GSS enhancer")
     enhancer = get_enhancer(
@@ -189,9 +234,12 @@ def recording_(
         error_handling="keep_original",
         activity_garbage_class=False,
         bss_iterations=bss_iterations,
-        num_channels=num_channels,
+        context_duration=context_duration,
+        max_batch_duration=max_batch_duration,
+        max_batch_cuts=max_batch_cuts,
+        num_buckets=num_buckets,
     )
 
-    logger.info(f"Enhancing {len(cuts_per_segment)} segments")
+    logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")
     num_errors = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
     logger.info(f"Finished with {num_errors} errors")

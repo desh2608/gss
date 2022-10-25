@@ -15,6 +15,9 @@ EXP_DIR=exp/libricss${affix}
 
 cmd="queue-ackgpu.pl --gpu 1 --mem 4G --config conf/gpu.conf"
 
+mkdir -p $DATA_DIR
+mkdir -p $EXP_DIR
+
 if [ -z $rttm_dir ]; then
     supervisions_path=$DATA_DIR/libricss_supervisions_all.jsonl.gz
 else
@@ -47,7 +50,7 @@ fi
 
 if [ $stage -le 4 ]; then
     echo "Stage 4: Split segments into $nj parts"
-    lhotse split --no-pad $nj $EXP_DIR/cuts_per_segment.jsonl.gz $EXP_DIR/split$nj
+    gss utils split $nj $EXP_DIR/cuts_per_segment.jsonl.gz $EXP_DIR/split$nj
 fi
 
 if [ $stage -le 5 ]; then
@@ -59,5 +62,6 @@ if [ $stage -le 5 ]; then
           --num-channels 7 \
           --bss-iterations 10 \
           --min-segment-length 0.0 \
-          --max-segment-length 15.0
+          --max-segment-length 15.0 \
+          --max-batch-duration 20.0
 fi

@@ -37,3 +37,34 @@ def rttm_to_supervisions_(rttm_path, out_path, channels):
         [fastcopy(s, channel=list(range(channels))) for s in supervisions]
     )
     supervisions.to_file(out_path)
+
+
+@utils.command(name="split")
+@click.argument("num_splits", type=int)
+@click.argument(
+    "manifest", type=click.Path(exists=True, dir_okay=False, allow_dash=True)
+)
+@click.argument("output_dir", type=click.Path())
+def split_(num_splits, manifest, output_dir):
+    """
+    This is similar to Lhotse's split command, but we additionally try to ensure that
+    cuts from the same recording and speaker stay in the same split as much as possible.
+    This is done by sorting the cuts by recording ID and speaker ID, and then splitting
+    them into chunks of approximately equal size.
+    """
+    from lhotse import CutSet
+    from lhotse.serialization import load_manifest_lazy_or_eager
+
+    output_dir = Path(output_dir)
+    manifest = Path(manifest)
+    suffix = "".join(manifest.suffixes)
+    cuts = load_manifest_lazy_or_eager(manifest)
+
+    # sort cuts by recording ID and speaker ID
+    cuts = CutSet.from_cuts(
+        sorted(cuts, key=lambda c: (c.recording_id, c.supervisions[0].speaker))
+    )
+    parts = cuts.split(num_splits=num_splits, shuffle=False)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for idx, part in enumerate(parts):
+        part.to_file((output_dir / manifest.stem).with_suffix(f".{str(idx+1)}{suffix}"))
