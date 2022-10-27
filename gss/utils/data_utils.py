@@ -69,13 +69,9 @@ class GssDataset(Dataset):
         )
         right_context = new_cuts[-1].end - orig_cuts[-1].end
 
-        # Concatenate the cuts into a single sequence. For each cut, we also need to store
-        # its start/end time w.r.t. the concatenated sequence, so that we can
-        # later split the enhanced audio into individual cuts.
         concatenated = None
         activity = []
-        start_times = []
-        for orig_cut, new_cut in zip(orig_cuts, new_cuts):
+        for new_cut in new_cuts:
             concatenated = (
                 new_cut
                 if concatenated is None
@@ -85,7 +81,6 @@ class GssDataset(Dataset):
                 new_cut.recording_id, new_cut.start, new_cut.duration
             )
             activity.append(cut_activity)
-            start_times.append(orig_cut.start - concatenated.start)
 
         # Load audio
         audio = concatenated.load_audio()
@@ -108,7 +103,6 @@ class GssDataset(Dataset):
             "speaker": speaker,
             "speaker_idx": spk_to_idx_map[speaker],
             "recording_id": recording_id,
-            "start_times": start_times,
         }
 
     def _validate(self, cuts: CutSet) -> None:
@@ -127,17 +121,23 @@ def create_sampler(
     cuts: CutSet, max_duration: float = None, max_cuts: int = None, num_buckets: int = 1
 ) -> RoundRobinSampler:
     buckets = create_buckets_by_speaker(cuts)
-    sampler = RoundRobinSampler(
-        *[
-            DynamicBucketingSampler(
-                bucket,
-                max_duration=max_duration,
-                max_cuts=max_cuts,
-                num_buckets=num_buckets,
+    samplers = []
+    for bucket in buckets:
+        num_buckets = min(num_buckets, len(frozenset(bucket.ids)))
+        if num_buckets == 1:
+            samplers.append(
+                DynamicCutSampler(bucket, max_duration=max_duration, max_cuts=max_cuts)
             )
-            for bucket in buckets
-        ]
-    )
+        else:
+            samplers.append(
+                DynamicBucketingSampler(
+                    bucket,
+                    num_buckets=num_buckets,
+                    max_duration=max_duration,
+                    max_cuts=max_cuts,
+                )
+            )
+    sampler = RoundRobinSampler(*samplers)
     return sampler
 
 

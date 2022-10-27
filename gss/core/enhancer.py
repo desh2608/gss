@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import cupy as cp
 import numpy as np
 import soundfile as sf
-from lhotse.utils import compute_num_samples
+from lhotse.utils import add_durations, compute_num_samples
 from torch.utils.data import DataLoader
 
 from gss.core import GSS, WPE, Activity, Beamformer
@@ -203,29 +203,27 @@ class Enhancer:
                         x_hat = batch.audio[0:1].cpu().numpy()
                     break
 
-            for cut, start_time, exists in zip(
-                batch.orig_cuts, batch.start_times, file_exists
-            ):
+            offset = 0
+            for cut, exists in zip(batch.orig_cuts, file_exists):
                 save_path = Path(
                     f"{batch.recording_id}-{batch.speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
                 )
                 if exists:
                     logging.info(f"File {save_path} already exists. Skipping.")
                     continue
-                x_hat_cut = x_hat[
-                    :,
-                    compute_num_samples(
-                        start_time, self.sampling_rate
-                    ) : compute_num_samples(
-                        start_time + cut.duration, self.sampling_rate
-                    ),
-                ]
+                st = compute_num_samples(offset, self.sampling_rate)
+                en = st + compute_num_samples(cut.duration, self.sampling_rate)
+                x_hat_cut = x_hat[:, st:en]
                 logging.debug("Saving enhanced signal")
                 sf.write(
                     file=str(out_dir / save_path),
                     data=x_hat_cut.transpose(),
                     samplerate=self.sampling_rate,
                     format="FLAC",
+                )
+                # Update offset for the next cut
+                offset = add_durations(
+                    offset, cut.duration, sampling_rate=self.sampling_rate
                 )
         return num_error
 
