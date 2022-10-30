@@ -1,9 +1,12 @@
 import functools
 import logging
+import time
 from pathlib import Path
+from typing import Tuple
 
 import click
-from lhotse import CutSet, Recording, SupervisionSet, load_manifest
+from lhotse import Recording, SupervisionSet, load_manifest
+from lhotse.cut import CutSet, MixedCut, MonoCut
 from lhotse.utils import fastcopy
 
 from gss.bin.modes.cli_base import cli
@@ -40,6 +43,19 @@ def common_options(func):
         show_default=True,
     )
     @click.option(
+        "--context-duration",
+        type=float,
+        default=15.0,
+        help="Context duration in seconds for CACGMM",
+        show_default=True,
+    )
+    @click.option(
+        "--use-garbage-class/--no-garbage-class",
+        default=False,
+        help="Whether to use the additional noise class for CACGMM",
+        show_default=True,
+    )
+    @click.option(
         "--min-segment-length",
         type=float,
         default=0.0,
@@ -51,13 +67,6 @@ def common_options(func):
         type=float,
         default=15.0,
         help="Chunk up longer segments to avoid OOM issues",
-        show_default=True,
-    )
-    @click.option(
-        "--context-duration",
-        type=float,
-        default=15.0,
-        help="Context duration in seconds for CACGMM",
         show_default=True,
     )
     @click.option(
@@ -75,11 +84,25 @@ def common_options(func):
         show_default=True,
     )
     @click.option(
+        "--num-workers",
+        type=int,
+        default=1,
+        help="Number of workers for parallel processing",
+        show_default=True,
+    )
+    @click.option(
         "--num-buckets",
         type=int,
         default=2,
         help="Number of buckets per speaker for batching (use larger values if you set higer max-segment-length)",
         show_default=True,
+    )
+    @click.option(
+        "--enhanced-manifest",
+        "-o",
+        type=click.Path(),
+        default=None,
+        help="Path to the output manifest containing details of the enhanced segments.",
     )
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -108,12 +131,15 @@ def cuts_(
     enhanced_dir,
     num_channels,
     bss_iterations,
+    context_duration,
+    use_garbage_class,
     min_segment_length,
     max_segment_length,
-    context_duration,
     max_batch_duration,
     max_batch_cuts,
+    num_workers,
     num_buckets,
+    enhanced_manifest,
 ):
     """
     Enhance segments (represented by cuts).
@@ -143,18 +169,24 @@ def cuts_(
     logger.info("Initializing GSS enhancer")
     enhancer = get_enhancer(
         cuts=cuts,
-        error_handling="keep_original",
-        activity_garbage_class=False,
         bss_iterations=bss_iterations,
         context_duration=context_duration,
+        activity_garbage_class=use_garbage_class,
         max_batch_duration=max_batch_duration,
         max_batch_cuts=max_batch_cuts,
+        num_workers=num_workers,
         num_buckets=num_buckets,
     )
 
     logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")
-    num_errors = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
-    logger.info(f"Finished with {num_errors} errors")
+    begin = time.time()
+    num_errors, out_cuts = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
+    end = time.time()
+    logger.info(f"Finished in {end-begin:.2f}s with {num_errors} errors")
+
+    if enhanced_manifest is not None:
+        logger.info(f"Saving enhanced cuts manifest to {enhanced_manifest}")
+        out_cuts.to_file(enhanced_manifest)
 
 
 @enhance.command(name="recording")
@@ -184,12 +216,15 @@ def recording_(
     recording_id,
     num_channels,
     bss_iterations,
+    context_duration,
+    use_garbage_class,
     min_segment_length,
     max_segment_length,
-    context_duration,
     max_batch_duration,
     max_batch_cuts,
+    num_workers,
     num_buckets,
+    enhanced_manifest,
 ):
     """
     Enhance a single recording using an RTTM file.
@@ -231,15 +266,21 @@ def recording_(
     logger.info("Initializing GSS enhancer")
     enhancer = get_enhancer(
         cuts=cuts,
-        error_handling="keep_original",
-        activity_garbage_class=False,
         bss_iterations=bss_iterations,
         context_duration=context_duration,
+        activity_garbage_class=use_garbage_class,
         max_batch_duration=max_batch_duration,
         max_batch_cuts=max_batch_cuts,
+        num_workers=num_workers,
         num_buckets=num_buckets,
     )
 
     logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")
-    num_errors = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
-    logger.info(f"Finished with {num_errors} errors")
+    begin = time.time()
+    num_errors, out_cuts = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
+    end = time.time()
+    logger.info(f"Finished in {end-begin:.2f}s with {num_errors} errors")
+
+    if enhanced_manifest is not None:
+        logger.info(f"Saving enhanced cuts manifest to {enhanced_manifest}")
+        out_cuts.to_file(enhanced_manifest)

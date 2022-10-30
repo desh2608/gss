@@ -67,5 +67,9 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
           --min-segment-length 0.0 \
           --max-segment-length 15.0 \
           --max-batch-duration 20.0 \
-          --num-buckets 3
+          --num-buckets 3 \
+          --enhanced-manifest $EXP_DIR/split$nj/cuts_enhanced.JOB.jsonl.gz
+
+    echo "Stage 5: Combine enhanced cuts"
+    lhotse combine $EXP_DIR/split$nj/cuts_enhanced.*.jsonl.gz $EXP_DIR/cuts_enhanced.jsonl.gz
 fi

@@ -1,4 +1,5 @@
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -6,6 +7,7 @@ from types import SimpleNamespace
 import cupy as cp
 import numpy as np
 import soundfile as sf
+from lhotse import CutSet, Recording, RecordingSet, SupervisionSegment, SupervisionSet
 from lhotse.utils import add_durations, compute_num_samples
 from torch.utils.data import DataLoader
 
@@ -40,10 +42,10 @@ def get_enhancer(
     bss_iterations_post=1,
     bf_drop_context=True,
     postfilter=None,
-    error_handling="ignore",
     max_batch_duration=None,
     max_batch_cuts=None,
-    num_buckets=1,
+    num_buckets=2,
+    num_workers=1,
 ):
     assert wpe is True or wpe is False, wpe
     assert len(cuts) > 0
@@ -76,10 +78,10 @@ def get_enhancer(
         stft_shift=stft_shift,
         stft_fading=stft_fading,
         sampling_rate=sampling_rate,
-        error_handling=error_handling,
         max_batch_duration=max_batch_duration,
         max_batch_cuts=max_batch_cuts,
         num_buckets=num_buckets,
+        num_workers=num_workers,
     )
 
 
@@ -104,11 +106,10 @@ class Enhancer:
     context_duration: float  # e.g. 15
     sampling_rate: int
 
-    error_handling: str = "ignore"
-
     max_batch_duration: float = None
     max_batch_cuts: int = None
-    num_buckets: int = 1
+    num_buckets: int = 2
+    num_workers: int = 1
 
     def stft(self, x):
         from paderbox.transform.module_stft import stft
@@ -135,6 +136,9 @@ class Enhancer:
         Enhance the given CutSet.
         """
         num_error = 0
+        out_cuts = []  # list of enhanced cuts
+
+        # Create the dataset, sampler, and data loader
         gss_dataset = GssDataset(
             context_duration=self.context_duration, activity=self.activity
         )
@@ -148,84 +152,132 @@ class Enhancer:
             gss_dataset,
             sampler=gss_sampler,
             batch_size=None,
-            num_workers=1,
+            num_workers=self.num_workers,
             persistent_workers=False,
         )
-        # Iterate over batches
-        for batch_idx, batch in enumerate(dl):
-            batch = SimpleNamespace(**batch)
-            logging.info(
-                f"Processing batch {batch_idx+1} {batch.recording_id, batch.speaker}: "
-                f"{len(batch.orig_cuts)} segments = {batch.duration}s"
-            )
-            out_dir = exp_dir / batch.recording_id
-            out_dir.mkdir(parents=True, exist_ok=True)
 
-            file_exists = []
-            for cut in batch.orig_cuts:
+        def _save_worker(orig_cuts, x_hat, recording_id, speaker):
+            out_dir = exp_dir / recording_id
+            enhanced_recordings = []
+            enhanced_supervisions = []
+            offset = 0
+            for cut in orig_cuts:
                 save_path = Path(
-                    f"{batch.recording_id}-{batch.speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
+                    f"{recording_id}-{speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
                 )
-                file_exists.append((out_dir / save_path).exists())
-
-            if all(file_exists):
-                logging.info("All files already exist. Skipping.")
-                continue
-
-            # Sometimes the segment may be large and cause OOM issues in CuPy. If this
-            # happens, we increasingly chunk it up into smaller segments until it can
-            # be processed without breaking.
-            num_chunks = 1
-            while True:
-                try:
-                    x_hat = self.enhance_batch(
-                        batch.audio,
-                        batch.activity,
-                        batch.speaker_idx,
-                        num_chunks=num_chunks,
-                        left_context=batch.left_context,
-                        right_context=batch.right_context,
+                if not (out_dir / save_path).exists():
+                    st = compute_num_samples(offset, self.sampling_rate)
+                    en = st + compute_num_samples(cut.duration, self.sampling_rate)
+                    x_hat_cut = x_hat[:, st:en]
+                    logging.debug("Saving enhanced signal")
+                    sf.write(
+                        file=str(out_dir / save_path),
+                        data=x_hat_cut.transpose(),
+                        samplerate=self.sampling_rate,
+                        format="FLAC",
                     )
-                    break
-                except cp.cuda.memory.OutOfMemoryError:
-                    num_chunks = num_chunks + 1
-                    logging.warning(
-                        f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
+                    # Update offset for the next cut
+                    offset = add_durations(
+                        offset, cut.duration, sampling_rate=self.sampling_rate
                     )
-                except Exception as e:
-                    logging.error(f"Error enhancing batch: {e}")
-                    num_error += 1
-                    if self.error_handling == "keep_original":
+                else:
+                    logging.info(f"File {save_path} already exists. Skipping.")
+                # add enhanced recording to list
+                enhanced_recordings.append(Recording.from_file(out_dir / save_path))
+                # modify supervision channels since enhanced recording has only 1 channel
+                enhanced_supervisions.extend(
+                    [
+                        SupervisionSegment(
+                            id=str(save_path),
+                            recording_id=str(save_path),
+                            start=segment.start,
+                            duration=segment.duration,
+                            channel=0,
+                            text=segment.text,
+                            language=segment.language,
+                            speaker=segment.speaker,
+                        )
+                        for segment in cut.supervisions
+                    ]
+                )
+            return enhanced_recordings, enhanced_supervisions
+
+        # Iterate over batches
+        futures = []
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            for batch_idx, batch in enumerate(dl):
+                batch = SimpleNamespace(**batch)
+                logging.info(
+                    f"Processing batch {batch_idx+1} {batch.recording_id, batch.speaker}: "
+                    f"{len(batch.orig_cuts)} segments = {batch.duration}s"
+                )
+                out_dir = exp_dir / batch.recording_id
+                out_dir.mkdir(parents=True, exist_ok=True)
+
+                file_exists = []
+                for cut in batch.orig_cuts:
+                    save_path = Path(
+                        f"{batch.recording_id}-{batch.speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
+                    )
+                    file_exists.append((out_dir / save_path).exists())
+
+                if all(file_exists):
+                    logging.info("All files already exist. Skipping.")
+                    continue
+
+                # Sometimes the segment may be large and cause OOM issues in CuPy. If this
+                # happens, we increasingly chunk it up into smaller segments until it can
+                # be processed without breaking.
+                num_chunks = 1
+                while True:
+                    try:
+                        x_hat = self.enhance_batch(
+                            batch.audio,
+                            batch.activity,
+                            batch.speaker_idx,
+                            num_chunks=num_chunks,
+                            left_context=batch.left_context,
+                            right_context=batch.right_context,
+                        )
+                        break
+                    except cp.cuda.memory.OutOfMemoryError:
+                        num_chunks = num_chunks + 1
+                        logging.warning(
+                            f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
+                        )
+                    except Exception as e:
+                        logging.error(f"Error enhancing batch: {e}")
+                        num_error += 1
                         # Keep the original signal (only load channel 0)
                         # NOTE (@desh2608): One possible issue here is that the whole batch
                         # may fail even if the issue is only due to one segment. We may
                         # want to handle this case separately.
                         x_hat = batch.audio[0:1].cpu().numpy()
-                    break
+                        break
 
-            offset = 0
-            for cut, exists in zip(batch.orig_cuts, file_exists):
-                save_path = Path(
-                    f"{batch.recording_id}-{batch.speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
+                # Save the enhanced cut to disk
+                futures.append(
+                    executor.submit(
+                        _save_worker,
+                        batch.orig_cuts,
+                        x_hat,
+                        batch.recording_id,
+                        batch.speaker,
+                    )
                 )
-                if exists:
-                    logging.info(f"File {save_path} already exists. Skipping.")
-                    continue
-                st = compute_num_samples(offset, self.sampling_rate)
-                en = st + compute_num_samples(cut.duration, self.sampling_rate)
-                x_hat_cut = x_hat[:, st:en]
-                logging.debug("Saving enhanced signal")
-                sf.write(
-                    file=str(out_dir / save_path),
-                    data=x_hat_cut.transpose(),
-                    samplerate=self.sampling_rate,
-                    format="FLAC",
-                )
-                # Update offset for the next cut
-                offset = add_durations(
-                    offset, cut.duration, sampling_rate=self.sampling_rate
-                )
-        return num_error
+
+        out_recordings = []
+        out_supervisions = []
+        for future in futures:
+            enhanced_recordings, enhanced_supervisions = future.result()
+            out_recordings.extend(enhanced_recordings)
+            out_supervisions.extend(enhanced_supervisions)
+
+        out_recordings = RecordingSet.from_recordings(out_recordings)
+        out_supervisions = SupervisionSet.from_segments(out_supervisions)
+        return num_error, CutSet.from_manifests(
+            recordings=out_recordings, supervisions=out_supervisions
+        )
 
     def enhance_batch(
         self, obs, activity, speaker_id, num_chunks=1, left_context=0, right_context=0

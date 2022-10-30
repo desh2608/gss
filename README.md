@@ -4,6 +4,15 @@
 in which the mask estimation is guided by a diarizer output. The original method was proposed
 for the CHiME-5 challenge in [this paper](http://spandh.dcs.shef.ac.uk/chime_workshop/papers/CHiME_2018_paper_boeddecker.pdf) by Boeddeker et al.
 
+It is a kind of target-speaker extraction method. The inputs to the model are:
+
+1. A multi-channel recording, e.g., from an array microphone, of a long, unsegmented,
+multi-talker session (possibly with overlapping speech)
+2. An RTTM file containing speaker segment boundaries
+
+The system produces enhanced audio for each of the segments in the RTTM, removing the background
+speech and noise and "extracting" only the target speaker in the segment.
+
 This repository contains a GPU implementation of this method in Python, along with CLI binaries
 to run the enhancement from shell. We also provide several example "recipes" for using the
 method.
@@ -22,6 +31,8 @@ examples in the `recipes` directory for how to use the `gss` module for several 
 are currently aiming to support LibriCSS, AMI, and AliMeeting.
 * The inference can be done on multi-node GPU environment. This makes it several times faster than the
 original CPU implementation.
+* We have implemented batch processing of segments (see [this issue](https://github.com/desh2608/gss/issues/12) for details)
+to maximize GPU memory usage and provide additional speed-up.
 * We provide both Python modules and CLI for using the enhancement functions, which can be
 easily included in recipes from Kaldi, Icefall, ESPNet, etc.
 
@@ -67,7 +78,8 @@ RTTM file denoting speaker segments, run the following:
 export CUDA_VISIBLE_DEVICES=0
 gss enhance recording \
   /path/to/sessionA.wav /path/to/rttm exp/enhanced_segs \
-  --recording-id sessionA --min-segment-length 0.2 --max-segment-length 10.0
+  --recording-id sessionA --min-segment-length 0.1 --max-segment-length 10.0 \
+  --max-batch-duration 20.0 --num-buckets 2 -o exp/segments.jsonl.gz
 ```
 
 ### Enhancing a corpus
@@ -86,7 +98,7 @@ will be used to get speaker activities.
 4. Trim the recording-level cut set into segment-level cuts. These are the segments that will
 actually be enhanced.
 
-5. Split the segments into as many parts as the number of GPU jobs you want to run. In the
+5. (Optional) Split the segments into as many parts as the number of GPU jobs you want to run. In the
 recipes, we submit the jobs through `qsub` , similar to Kaldi or ESPNet recipes. You can
 use the parallelization in those toolkits to additionally use a different scheduler such as
 SLURM.
@@ -97,25 +109,49 @@ SLURM.
 
 * `--bss-iteration`: Number of iterations of the CACGMM inference.
 
+* `--context-duration`: Context (in seconds) to include on both sides of the segment.
+
 * `--min-segment-length`: Any segment shorter than this value will be removed. This is
 particularly useful when using segments from a diarizer output since they often contain
-very small segments which are not relevant for ASR. A recommended setting is 0.2s.
+very small segments which are not relevant for ASR. A recommended setting is 0.1s.
 
 * `--max-segment-length`: Segments longer than this value will be chunked up. This is
 to prevent OOM errors since the segment STFTs are loaded onto the GPU. We use a setting
 of 15s in most cases.
 
-Internally, we also have a fallback option to chunk up segments into increasingly smaller
+* `--max-batch-duration`: Segments from the same speaker will be batched together to increase
+GPU efficiency. We used 20s batches for enhancement on GPUs with 12G memory. For GPUs with
+larger memory, this value can be increased.
+
+* `--max-batch-cuts`: This sets an upper limit on the maximum number of cuts in a batch. To
+simulate segment-wise enhancement, set this to 1.
+
+* `--num-workers`: Number of workers to use for data-loading (default = 1). Use more if you
+increase the `max-batch-duration` .
+
+* `--num-buckets`: Number of buckets to use for sampling. Batches are drawn from the same
+bucket (see Lhotse's [ `DynamicBucketingSampler` ](https://github.com/lhotse-speech/lhotse/blob/master/lhotse/dataset/sampling/dynamic_bucketing.py) for details).
+
+* `--enhanced-manifest/-o`: Path to manifest file to write the enhanced cut manifest. This
+is useful for cases when the supervisions need to be propagated to the enhanced segments,
+for downstream ASR tasks, for example.
+
+## Other details
+
+Internally, we also have a fallback option to chunk up batches into increasingly smaller
 parts in case OOM error is encountered (see `gss.core.enhancer.py` ).
 
-The enhanced wav files will be written to `$EXP_DIR/enhanced` . The wav files are named
-as *recoid-spkid-start_end.wav*, i.e., 1 wav file is generated for each segment in the RTTM.
-The "start" and "end" are padded to 6 digits, for example: 21.18 seconds is encoded as
-`002118` . This convention should be fine if your audio duration is under ~2.75 h (9999s),
-otherwise, you should change the padding in `gss/core/enhancer.py` .
+The enhanced wav files are named as *recoid-spkid-start_end.wav*, i.e., 1 wav file is
+generated for each segment in the RTTM. The "start" and "end" are padded to 6 digits,
+for example: 21.18 seconds is encoded as `002118` . This convention should be fine if
+your audio duration is under ~2.75 h (9999s), otherwise, you should change the
+padding in `gss/core/enhancer.py` .
 
 For examples of how to generate RTTMs for guiding the separation, please refer to my
 [diarizer](https://github.com/desh2608/diarizer) toolkit.
+
+**Additional parameters:** We have only made the most important parameters available in the
+top-level CLI. To play with other parameters, check out the `gss.enhancer.get_enhancer()` function.
 
 ## Contributing
 
