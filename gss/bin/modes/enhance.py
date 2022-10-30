@@ -2,15 +2,15 @@ import functools
 import logging
 import time
 from pathlib import Path
-from typing import Tuple
 
 import click
 from lhotse import Recording, SupervisionSet, load_manifest
-from lhotse.cut import CutSet, MixedCut, MonoCut
+from lhotse.cut import CutSet
 from lhotse.utils import fastcopy
 
 from gss.bin.modes.cli_base import cli
 from gss.core.enhancer import get_enhancer
+from gss.utils.data_utils import post_process_manifests
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -186,6 +186,7 @@ def cuts_(
 
     if enhanced_manifest is not None:
         logger.info(f"Saving enhanced cuts manifest to {enhanced_manifest}")
+        out_cuts = post_process_manifests(out_cuts)
         out_cuts.to_file(enhanced_manifest)
 
 
@@ -283,4 +284,5 @@ def recording_(
 
     if enhanced_manifest is not None:
         logger.info(f"Saving enhanced cuts manifest to {enhanced_manifest}")
+        out_cuts = post_process_manifests(out_cuts, enhanced_dir)
         out_cuts.to_file(enhanced_manifest)
