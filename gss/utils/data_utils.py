@@ -1,9 +1,11 @@
-from collections import defaultdict
+from collections import defaultdict, namedtuple
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
+from cytoolz.itertoolz import groupby
 from lhotse import CutSet, validate
-from lhotse.cut import Cut
+from lhotse.cut import Cut, MixedCut
 from lhotse.dataset.sampling.dynamic import DynamicCutSampler
 from lhotse.dataset.sampling.dynamic_bucketing import DynamicBucketingSampler
 from lhotse.dataset.sampling.round_robin import RoundRobinSampler
@@ -90,7 +92,7 @@ class GssDataset(Dataset):
             "audio": audio,
             "duration": add_durations(
                 *[c.duration for c in orig_cuts],
-                sampling_rate=concatenated.sampling_rate
+                sampling_rate=concatenated.sampling_rate,
             ),
             "left_context": compute_num_samples(
                 left_context, sampling_rate=concatenated.sampling_rate
@@ -238,3 +240,62 @@ def activity_time_to_frequency(
         shift=stft_shift,
         end="pad" if stft_pad else "cut",
     ).any(axis=-1)
+
+
+EnhancedCut = namedtuple(
+    "EnhancedCut", ["cut", "recording_id", "speaker", "start", "end"]
+)
+
+
+def post_process_manifests(cuts, enhanced_dir):
+    """
+    Post-process the enhanced cuts to combine the ones that were created from the same
+    segment (split due to cut_into_windows).
+    """
+    enhanced_dir = Path(enhanced_dir)
+
+    def _get_cut_info(cut):
+        reco_id, spk, start_end = cut.recording_id.split("-")
+        start, end = start_end.split("_")
+        return reco_id, spk, float(start) / 100, float(end) / 100
+
+    enhanced_cuts = []
+    for cut in cuts:
+        reco_id, spk, start, end = _get_cut_info(cut)
+        enhanced_cuts.append(EnhancedCut(cut, reco_id, spk, start, end))
+
+    # group cuts by recording id and speaker
+    enhanced_cuts = sorted(enhanced_cuts, key=lambda x: (x.recording_id, x.speaker))
+    groups = groupby(lambda x: (x.recording_id, x.speaker), enhanced_cuts)
+
+    combined_cuts = []
+    # combine cuts that were created from the same segment
+    for (reco_id, spk), in_cuts in groups.items():
+        in_cuts = sorted(in_cuts, key=lambda x: x.start)
+        out_cut = in_cuts[0]
+        for cut in in_cuts[1:]:
+            if cut.start == out_cut.end:
+                out_cut = EnhancedCut(
+                    cut=out_cut.cut.append(cut.cut),
+                    recording_id=reco_id,
+                    speaker=spk,
+                    start=out_cut.start,
+                    end=cut.end,
+                )
+            else:
+                combined_cuts.append(out_cut)
+                out_cut = cut
+        combined_cuts.append(out_cut)
+
+    # write the combined cuts to the enhanced manifest
+    out_cuts = []
+    for cut in combined_cuts:
+        out_cut = cut.cut
+        if isinstance(out_cut, MixedCut):
+            out_cut = out_cut.save_audio(
+                (enhanced_dir / cut.recording_id)
+                / f"{cut.recording_id}-{cut.speaker}-{int(cut.start*100):06d}_{int(cut.end*100):06d}.flac"
+            )
+        out_cuts.append(out_cut)
+
+    return CutSet.from_cuts(out_cuts)
