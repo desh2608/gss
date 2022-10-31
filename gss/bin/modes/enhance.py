@@ -257,7 +257,7 @@ def recording_(
     # Create segment-wise cuts
     cuts_per_segment = cuts.trim_to_supervisions(
         keep_overlapping=False, keep_all_channels=True
-    ).subset(first=30)
+    )
 
     logger.info("Aplying min/max segment length constraints")
     cuts_per_segment = cuts_per_segment.filter(
