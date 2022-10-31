@@ -186,7 +186,7 @@ def cuts_(
 
     if enhanced_manifest is not None:
         logger.info(f"Saving enhanced cuts manifest to {enhanced_manifest}")
-        out_cuts = post_process_manifests(out_cuts)
+        out_cuts = post_process_manifests(out_cuts, enhanced_dir)
         out_cuts.to_file(enhanced_manifest)
 
 
