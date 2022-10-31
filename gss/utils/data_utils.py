@@ -269,6 +269,7 @@ def post_process_manifests(cuts, enhanced_dir):
     groups = groupby(lambda x: (x.recording_id, x.speaker), enhanced_cuts)
 
     combined_cuts = []
+    wavs_to_be_removed = []
     # combine cuts that were created from the same segment
     for (reco_id, spk), in_cuts in groups.items():
         in_cuts = sorted(in_cuts, key=lambda x: x.start)
@@ -282,6 +283,9 @@ def post_process_manifests(cuts, enhanced_dir):
                     start=out_cut.start,
                     end=cut.end,
                 )
+                # Delete the wav file of the cut that was appended (otherwise we will
+                # have repeated audio)
+                wavs_to_be_removed.append(cut.cut.recording.sources[0].source)
             else:
                 combined_cuts.append(out_cut)
                 out_cut = cut
@@ -297,5 +301,9 @@ def post_process_manifests(cuts, enhanced_dir):
                 / f"{cut.recording_id}-{cut.speaker}-{int(cut.start*100):06d}_{int(cut.end*100):06d}.flac"
             )
         out_cuts.append(out_cut)
+
+    # remove the wav files of the cuts that were appended
+    for wav in wavs_to_be_removed:
+        Path(wav).unlink()
 
     return CutSet.from_cuts(out_cuts)

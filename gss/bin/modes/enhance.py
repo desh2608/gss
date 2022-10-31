@@ -186,7 +186,7 @@ def cuts_(
 
     if enhanced_manifest is not None:
         logger.info(f"Saving enhanced cuts manifest to {enhanced_manifest}")
-        out_cuts = post_process_manifests(out_cuts)
+        out_cuts = post_process_manifests(out_cuts, enhanced_dir)
         out_cuts.to_file(enhanced_manifest)
 
 
@@ -257,7 +257,7 @@ def recording_(
     # Create segment-wise cuts
     cuts_per_segment = cuts.trim_to_supervisions(
         keep_overlapping=False, keep_all_channels=True
-    )
+    ).subset(first=30)
 
     logger.info("Aplying min/max segment length constraints")
     cuts_per_segment = cuts_per_segment.filter(
