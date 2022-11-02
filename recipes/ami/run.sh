@@ -62,7 +62,7 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
         gss enhance cuts \
           $EXP_DIR/cuts.jsonl.gz $EXP_DIR/split$nj/cuts_per_segment.JOB.jsonl.gz \
           $EXP_DIR/enhanced \
-          --num-channels 7 \
+          --channels 0,1,2,3,4,5,6,7 \
           --bss-iterations 10 \
           --min-segment-length 0.0 \
           --max-segment-length 15.0 \

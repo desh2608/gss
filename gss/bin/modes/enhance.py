@@ -28,11 +28,12 @@ def enhance():
 
 def common_options(func):
     @click.option(
-        "--num-channels",
+        "--channels",
         "-c",
-        type=int,
+        type=str,
         default=None,
-        help="Number of channels to use for enhancement. All channels will be used by default.",
+        help="Channels to use for enhancement. Specify with comma-separated values, e.g. "
+        "`--channels 0,2,4`. All channels will be used by default.",
     )
     @click.option(
         "--bss-iterations",
@@ -129,7 +130,7 @@ def cuts_(
     cuts_per_recording,
     cuts_per_segment,
     enhanced_dir,
-    num_channels,
+    channels,
     bss_iterations,
     context_duration,
     use_garbage_class,
@@ -154,10 +155,9 @@ def cuts_(
     cuts = load_manifest(cuts_per_recording)
     cuts_per_segment = load_manifest(cuts_per_segment)
 
-    if num_channels is not None:
-        cuts = CutSet.from_cuts(
-            fastcopy(cut, channel=list(range(num_channels))) for cut in cuts
-        )
+    if channels is not None:
+        channels = [int(c) for c in channels.split(",")]
+        cuts = CutSet.from_cuts(fastcopy(cut, channel=channels) for cut in cuts)
     # Paranoia mode: ensure that cuts_per_recording have ids same as the recording_id
     cuts = CutSet.from_cuts(cut.with_id(cut.recording_id) for cut in cuts)
 
@@ -215,7 +215,7 @@ def recording_(
     rttm,
     enhanced_dir,
     recording_id,
-    num_channels,
+    channels,
     bss_iterations,
     context_duration,
     use_garbage_class,
@@ -239,8 +239,9 @@ def recording_(
     enhanced_dir.mkdir(exist_ok=True, parents=True)
 
     cut = Recording.from_file(recording, recording_id=recording_id).to_cut()
-    if num_channels is not None:
-        cut = fastcopy(cut, channel=list(range(num_channels)))
+    if channels is not None:
+        channels = [int(c) for c in channels.split(",")]
+        cut = fastcopy(cut, channel=channels)
 
     supervisions = SupervisionSet.from_rttm(rttm).filter(
         lambda s: s.recording_id == cut.id

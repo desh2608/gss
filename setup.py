@@ -29,8 +29,8 @@ dev_requires = [
 
 setup(
     name="gss",
-    version="0.4.0",
-    description="Guided Source Separation (based on pb_chime5)",
+    version="0.5.0",
+    description="GPU-accelerated Guided Source Separation",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/desh2608/gss",

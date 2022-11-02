@@ -61,14 +61,12 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
         gss enhance cuts \
           $EXP_DIR/cuts.jsonl.gz $EXP_DIR/split$nj/cuts_per_segment.JOB.jsonl.gz \
           $EXP_DIR/enhanced \
-          --num-channels 7 \
+          --use-garbage-class \
+          --channels 0,2,4,6 \
           --bss-iterations 10 \
+          --context-duration 10.0 \
           --min-segment-length 0.0 \
           --max-segment-length 15.0 \
-          --max-batch-duration 20.0 \
-          --num-buckets 2 \
-          --enhanced-manifest $EXP_DIR/split$nj/cuts_enhanced.JOB.jsonl.gz
-
-    echo "Stage 5: Combine enhanced cuts"
-    lhotse combine $EXP_DIR/split$nj/cuts_enhanced.*.jsonl.gz $EXP_DIR/cuts_enhanced.jsonl.gz
+          --max-batch-duration 50.0 \
+          --num-buckets 3
 fi
