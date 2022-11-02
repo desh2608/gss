@@ -101,7 +101,6 @@ class ComplexAngularCentralGaussian:
         assert is_broadcast_compatible(
             [*independent, D, D], self.covariance_eigenvectors.shape
         ), (y.shape, self.covariance_eigenvectors.shape)
-        self.y = y
 
         einsum_path = ["einsum_path", (1, 2), (1, 3), (0, 2), (0, 1)]
         quadratic_form = cp.maximum(
