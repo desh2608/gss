@@ -36,7 +36,9 @@ def get_power_spectral_density_matrix(
     observation = observation.transpose(obs_transpose)
 
     if mask is None:
-        psd = cp.einsum("...dt,...et->...de", observation, observation.conj())
+        psd = cp.einsum(
+            "...dt,...et->...de", observation, observation.conj(), optimize="optimal"
+        )
 
         # normalize
         psd /= observation.shape[-1]
@@ -72,7 +74,11 @@ def get_power_spectral_density_matrix(
             mask = mask.transpose(mask_transpose)
 
             psd = cp.einsum(
-                "...kt,...dt,...et->...kde", mask, observation, observation.conj()
+                "...kt,...dt,...et->...kde",
+                mask,
+                observation,
+                observation.conj(),
+                optimize="optimal",
             )
 
             if source_dim < -2:
@@ -83,17 +89,24 @@ def get_power_spectral_density_matrix(
 
 
 def blind_analytic_normalization(vector, noise_psd_matrix):
+    einsum_path = ["einsum_path", (0, 1), (0, 1), (0, 1)]
     nominator = cp.einsum(
         "...a,...ab,...bc,...c->...",
         vector.conj(),
         noise_psd_matrix,
         noise_psd_matrix,
         vector,
+        optimize=einsum_path,
     )
     nominator = cp.sqrt(nominator)
 
+    einsum_path = ["einsum_path", (0, 1), (0, 1)]
     denominator = cp.einsum(
-        "...a,...ab,...b->...", vector.conj(), noise_psd_matrix, vector
+        "...a,...ab,...b->...",
+        vector.conj(),
+        noise_psd_matrix,
+        vector,
+        optimize=einsum_path,
     )
     denominator = cp.sqrt(denominator * denominator.conj())
 
@@ -128,10 +141,21 @@ def get_optimal_reference_channel(
         )
     if eps is None:
         eps = cp.finfo(w_mat.dtype).tiny
+    einsum_path = ["einsum_path", (0, 1), (0, 1)]
     SNR = cp.einsum(
-        "...FdR,...FdD,...FDR->...R", w_mat.conj(), target_psd_matrix, w_mat
+        "...FdR,...FdD,...FDR->...R",
+        w_mat.conj(),
+        target_psd_matrix,
+        w_mat,
+        optimize=einsum_path,
     ) / cp.maximum(
-        cp.einsum("...FdR,...FdD,...FDR->...R", w_mat.conj(), noise_psd_matrix, w_mat),
+        cp.einsum(
+            "...FdR,...FdD,...FDR->...R",
+            w_mat.conj(),
+            noise_psd_matrix,
+            w_mat,
+            optimize=einsum_path,
+        ),
         eps,
     )
     # Raises an exception when np.inf and/or np.NaN was in target_psd_matrix

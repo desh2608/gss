@@ -74,16 +74,6 @@ class ComplexAngularCentralGaussian:
         )
 
     @property
-    def covariance(self):
-        return cp.einsum(
-            "...wx,...x,...zx->...wz",
-            self.covariance_eigenvectors,
-            self.covariance_eigenvalues,
-            self.covariance_eigenvectors.conj(),
-            optimize="greedy",
-        )
-
-    @property
     def log_determinant(self):
         return cp.sum(cp.log(self.covariance_eigenvalues), axis=-1)
 
@@ -111,7 +101,9 @@ class ComplexAngularCentralGaussian:
         assert is_broadcast_compatible(
             [*independent, D, D], self.covariance_eigenvectors.shape
         ), (y.shape, self.covariance_eigenvectors.shape)
+        self.y = y
 
+        einsum_path = ["einsum_path", (1, 2), (1, 3), (0, 2), (0, 1)]
         quadratic_form = cp.maximum(
             cp.abs(
                 cp.einsum(
@@ -121,7 +113,7 @@ class ComplexAngularCentralGaussian:
                     1 / self.covariance_eigenvalues,
                     self.covariance_eigenvectors.conj(),
                     y,
-                    optimize="optimal",
+                    optimize=einsum_path,
                 )
             ),
             cp.finfo(y.dtype).tiny,
