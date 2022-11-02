@@ -99,15 +99,13 @@ class ComplexAngularCentralGaussianTrainer:
             10 * cp.finfo(quadratic_form.dtype).tiny,
         )
 
+        einsum_path = ["einsum_path", (0, 2), (0, 1)]
         covariance = D * cp.einsum(
             "...dn,...Dn,...n->...dD",
             y,
             y.conj(),
             (saliency / quadratic_form),
-            # optimize='greedy',
-            # Without greedy the diagonal of the  covariance matrix is real
-            # valued, otherwise only approximately real values
-            # (i.e., values of 1e-17 for the imag part)
+            optimize=einsum_path,
         )
         assert cp.isfinite(quadratic_form).all()
         covariance /= cp.maximum(
