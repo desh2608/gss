@@ -214,7 +214,8 @@ def _stable_positive_inverse(power):
         # The scale of the power does not matter, so take 1.
         inverse_power = cp.ones_like(power)
     else:
-        inverse_power = 1 / cp.maximum(power, eps)
+        cp.clip(power, a_min=eps, out=power)
+        inverse_power = 1 / power
     return inverse_power
 
 
