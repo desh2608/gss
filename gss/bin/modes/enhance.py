@@ -105,6 +105,12 @@ def common_options(func):
         default=None,
         help="Path to the output manifest containing details of the enhanced segments.",
     )
+    @click.option(
+        "--profiler-output",
+        type=click.Path(),
+        default=None,
+        help="Path to the profiler output file.",
+    )
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -141,6 +147,7 @@ def cuts_(
     num_workers,
     num_buckets,
     enhanced_manifest,
+    profiler_output,
 ):
     """
     Enhance segments (represented by cuts).
@@ -149,6 +156,22 @@ def cuts_(
         CUTS_PER_SEGMENT: Lhotse cuts manifest containing cuts per segment (e.g. obtained using `trim-to-supervisions`)
         ENHANCED_DIR: Output directory for enhanced audio files
     """
+    if profiler_output is not None:
+        import atexit
+        import cProfile
+        import pstats
+
+        print("Profiling...")
+        pr = cProfile.Profile()
+        pr.enable()
+
+        def exit():
+            pr.disable()
+            print("Profiling completed")
+            pstats.Stats(pr).sort_stats("cumulative").dump_stats(profiler_output)
+
+        atexit.register(exit)
+
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)
 
@@ -226,6 +249,7 @@ def recording_(
     num_workers,
     num_buckets,
     enhanced_manifest,
+    profiler_output,
 ):
     """
     Enhance a single recording using an RTTM file.
@@ -234,6 +258,21 @@ def recording_(
         RTTM: Path to an RTTM file containing speech activity
         ENHANCED_DIR: Output directory for enhanced audio files
     """
+    if profiler_output is not None:
+        import atexit
+        import cProfile
+        import pstats
+
+        print("Profiling...")
+        pr = cProfile.Profile()
+        pr.enable()
+
+        def exit():
+            pr.disable()
+            print("Profiling completed")
+            pstats.Stats(pr).sort_stats("cumulative").dump_stats(profiler_output)
+
+        atexit.register(exit)
 
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)

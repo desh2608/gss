@@ -91,12 +91,16 @@ class ComplexAngularCentralGaussianTrainer:
             assert y.ndim == saliency.ndim + 1, (y.shape, saliency.ndim)
             denominator = cp.einsum("...n->...", saliency)[..., None, None]
 
+        # Set 0 values in denominator to small epsilon to avoid division by 0
+        cp.clip(denominator, a_min=cp.finfo(denominator.dtype).tiny, out=denominator)
+
         # When the covariance matrix is zero, quadratic_form would also zero.
         # quadratic_form have to be positive
-        quadratic_form = cp.maximum(
+        cp.clip(
             quadratic_form,
             # Use 2 * tiny, because tiny is to small
-            10 * cp.finfo(quadratic_form.dtype).tiny,
+            a_min=10 * cp.finfo(quadratic_form.dtype).tiny,
+            out=quadratic_form,
         )
 
         einsum_path = ["einsum_path", (0, 2), (0, 1)]
@@ -108,10 +112,7 @@ class ComplexAngularCentralGaussianTrainer:
             optimize=einsum_path,
         )
         assert cp.isfinite(quadratic_form).all()
-        covariance /= cp.maximum(
-            denominator,
-            cp.finfo(denominator.dtype).tiny,
-        )
+        covariance /= denominator
         assert covariance.shape == (*independent, D, D), (
             covariance.shape,
             (*independent, D, D),

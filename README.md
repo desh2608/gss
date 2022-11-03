@@ -153,6 +153,11 @@ For examples of how to generate RTTMs for guiding the separation, please refer t
 **Additional parameters:** We have only made the most important parameters available in the
 top-level CLI. To play with other parameters, check out the `gss.enhancer.get_enhancer()` function.
 
+**Profiling:** You can also profile your enhancement by providing the option `--profiler-output test.pstats`
+
+to the `gss enhance` CLI. The generated pstats file can then be visualized using
+[Snakeviz](https://jiffyclub.github.io/snakeviz/): `snakeviz test.pstats` .
+
 ## Contributing
 
 Contributions for core improvements or new recipes are welcome. Please run the following
