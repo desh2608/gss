@@ -156,7 +156,8 @@ top-level CLI. To play with other parameters, check out the `gss.enhancer.get_en
 **Profiling:** You can also profile your enhancement by providing the option `--profiler-output test.pstats`
 
 to the `gss enhance` CLI. The generated pstats file can then be visualized using
-[Snakeviz](https://jiffyclub.github.io/snakeviz/): `snakeviz test.pstats` .
+[Snakeviz](https://jiffyclub.github.io/snakeviz/): `snakeviz test.pstats` . An example output
+can be seen [here]().
 
 ## Contributing
 
