@@ -21,9 +21,10 @@ method.
 
 The core components of the tool are borrowed from [ `pb_chime5` ](https://github.com/fgnt/pb_chime5), but GPU support is added by porting most of the work to [CuPy](https://github.com/cupy/cupy).
 
-* The main components of the pipeline --- WPE, mask estimation with CACGMM, and beamforming --- are now
-built into their own packages: [WPE](https://github.com/desh2608/wpe), [CACGMM](https://github.com/desh2608/cacgmm), and [beamformer](https://github.com/desh2608/beamformer). The code is also
-directly included into this package for ease of installation.
+* All the main components of the pipeline --- STFT computation, WPE, mask estimation with CACGMM, and beamforming ---
+are ported to CuPy to use GPUs. For CACGMM, we batch all frequency indices instead of iterating over them.
+* We have implemented batch processing of segments (see [this issue](https://github.com/desh2608/gss/issues/12) for details)
+to maximize GPU memory usage and provide additional speed-up.
 * The GSS implementation (see `gss/core`) has been stripped of CHiME-6 dataset-specific peculiarities
 (such as array naming conventions etc.)
 * We use Lhotse for simplified data loading, speaker activity generation, and RTTM representation. We provide
@@ -31,10 +32,11 @@ examples in the `recipes` directory for how to use the `gss` module for several 
 are currently aiming to support LibriCSS, AMI, and AliMeeting.
 * The inference can be done on multi-node GPU environment. This makes it several times faster than the
 original CPU implementation.
-* We have implemented batch processing of segments (see [this issue](https://github.com/desh2608/gss/issues/12) for details)
-to maximize GPU memory usage and provide additional speed-up.
 * We provide both Python modules and CLI for using the enhancement functions, which can be
 easily included in recipes from Kaldi, Icefall, ESPNet, etc.
+
+As an example, applying GSS on a LibriCSS OV20 session (~10min) took ~160s on a single RTX2080 GPU (with 12G memory).
+See the `test.pstats` for the profiling output.
 
 ## Installation
 
@@ -136,6 +138,9 @@ bucket (see Lhotse's [ `DynamicBucketingSampler` ](https://github.com/lhotse-spe
 is useful for cases when the supervisions need to be propagated to the enhanced segments,
 for downstream ASR tasks, for example.
 
+* `--profiler-output`: Optional path to output stats file for profiling, which can be visualized
+using Snakeviz.
+
 ## Other details
 
 Internally, we also have a fallback option to chunk up batches into increasingly smaller
@@ -152,12 +157,6 @@ For examples of how to generate RTTMs for guiding the separation, please refer t
 
 **Additional parameters:** We have only made the most important parameters available in the
 top-level CLI. To play with other parameters, check out the `gss.enhancer.get_enhancer()` function.
-
-**Profiling:** You can also profile your enhancement by providing the option `--profiler-output test.pstats`
-
-to the `gss enhance` CLI. The generated pstats file can then be visualized using
-[Snakeviz](https://jiffyclub.github.io/snakeviz/): `snakeviz test.pstats` . An example output
-can be seen [here](https://htmlpreview.github.io/?https://github.com/desh2608/gss/blob/master/test_snakeviz.html).
 
 ## Contributing
 

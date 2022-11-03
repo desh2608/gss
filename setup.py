@@ -29,7 +29,7 @@ dev_requires = [
 
 setup(
     name="gss",
-    version="0.5.0",
+    version="0.6.0",
     description="GPU-accelerated Guided Source Separation",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -40,7 +40,6 @@ setup(
     packages=find_packages(exclude=["contrib", "docs", "tests"]),  # Required
     install_requires=[
         "cached_property",
-        "paderbox",
         "numpy",
         "lhotse @ git+http://github.com/lhotse-speech/lhotse",
     ],
