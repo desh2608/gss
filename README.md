@@ -157,7 +157,7 @@ top-level CLI. To play with other parameters, check out the `gss.enhancer.get_en
 
 to the `gss enhance` CLI. The generated pstats file can then be visualized using
 [Snakeviz](https://jiffyclub.github.io/snakeviz/): `snakeviz test.pstats` . An example output
-can be seen [here]().
+can be seen [here](test_snakeviz.html).
 
 ## Contributing
 
