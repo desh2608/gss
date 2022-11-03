@@ -112,7 +112,7 @@ class Enhancer:
     num_workers: int = 1
 
     def stft(self, x):
-        from paderbox.transform.module_stft import stft
+        from gss.core.stft_module import stft
 
         return stft(
             x,
@@ -122,7 +122,7 @@ class Enhancer:
         )
 
     def istft(self, X):
-        from paderbox.transform.module_stft import istft
+        from gss.core.stft_module import istft
 
         return istft(
             X,
@@ -292,6 +292,9 @@ class Enhancer:
             stft_pad=True,
         )
 
+        # Convert to cupy array (putting it on the GPU)
+        obs = cp.asarray(obs)
+
         logging.debug(f"Computing STFT")
         Obs = self.stft(obs)
 
@@ -303,7 +306,7 @@ class Enhancer:
         for i in range(num_chunks):
             st = i * chunk_size
             en = min(T, (i + 1) * chunk_size)
-            Obs_chunk = cp.asarray(Obs[:, st:en, :])
+            Obs_chunk = Obs[:, st:en, :]
 
             logging.debug(f"Applying WPE")
             if self.wpe_block is not None:
@@ -340,13 +343,13 @@ class Enhancer:
             st = i * chunk_size
             en = min(T, (i + 1) * chunk_size)
             X_hat_chunk = self.bf_block(
-                cp.asarray(Obs[:, st:en, :]),
+                Obs[:, st:en, :],
                 target_mask=target_mask[st:en],
                 distortion_mask=distortion_mask[st:en],
             )
             X_hat.append(X_hat_chunk)
 
-        X_hat = cp.asnumpy(cp.concatenate(X_hat, axis=0))
+        X_hat = cp.concatenate(X_hat, axis=0)
 
         logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)
@@ -357,4 +360,4 @@ class Enhancer:
         # Trim x_hat to original length of cut
         x_hat = x_hat[:, left_context:-right_context]
 
-        return x_hat
+        return cp.asnumpy(x_hat)

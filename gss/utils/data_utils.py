@@ -1,4 +1,5 @@
 from collections import defaultdict, namedtuple
+from math import ceil
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -154,13 +155,45 @@ def create_buckets_by_speaker(cuts: CutSet) -> List[CutSet]:
     return [CutSet.from_cuts(cuts) for cuts in buckets.values()]
 
 
+# Taken from: https://github.com/fgnt/nara_wpe/blob/452b95beb27afad3f8fa3e378de2803452906f1b/nara_wpe/utils.py#L203
+def _samples_to_stft_frames(
+    samples,
+    size,
+    shift,
+    *,
+    pad=True,
+    fading=False,
+):
+    """
+    Calculates number of STFT frames from number of samples in time domain.
+
+    Args:
+        samples: Number of samples in time domain.
+        size: FFT size.
+            window_length often equal to FFT size. The name size should be
+            marked as deprecated and replaced with window_length.
+        shift: Hop in samples.
+        pad: See stft.
+        fading: See stft. Note to keep old behavior, default value is False.
+
+    Returns:
+        Number of STFT frames.
+    """
+    if fading:
+        samples = samples + 2 * (size - shift)
+
+    # I changed this from np.ceil to math.ceil, to yield an integer result.
+    frames = (samples - size + shift) / shift
+    if pad:
+        return ceil(frames)
+    return int(frames)
+
+
 def start_end_context_frames(
     start_context_samples, end_context_samples, stft_size, stft_shift, stft_fading
 ):
     assert start_context_samples >= 0
     assert end_context_samples >= 0
-
-    from nara_wpe.utils import _samples_to_stft_frames
 
     start_context_frames = _samples_to_stft_frames(
         start_context_samples,
@@ -184,45 +217,6 @@ def activity_time_to_frequency(
     stft_fading,
     stft_pad=True,
 ):
-    """
-    >>> from nara_wpe.utils import stft
-    >>> signal = np.array([0, 0, 0, 0, 0, 1, -3, 0, 5, 0, 0, 0, 0, 0])
-    >>> vad = np.array(   [0, 0, 0, 0, 0, 1,  1, 0, 1, 0, 0, 0, 0, 0])
-    >>> np.set_printoptions(suppress=True)
-    >>> print(stft(signal, size=4, shift=2, fading=True, window=np.ones))
-    [[ 0.+0.j  0.+0.j  0.+0.j]
-     [ 0.+0.j  0.+0.j  0.+0.j]
-     [ 1.+0.j  0.+1.j -1.+0.j]
-     [-2.+0.j  3.-1.j -4.+0.j]
-     [ 2.+0.j -8.+0.j  2.+0.j]
-     [ 5.+0.j  5.+0.j  5.+0.j]
-     [ 0.+0.j  0.+0.j  0.+0.j]
-     [ 0.+0.j  0.+0.j  0.+0.j]]
-    >>> activity_time_to_frequency(vad, stft_window_length=4, stft_shift=2, stft_fading=True)
-    array([False, False,  True,  True,  True,  True, False, False])
-    >>> activity_time_to_frequency([vad, vad], stft_window_length=4, stft_shift=2, stft_fading=True)
-    array([[False, False,  True,  True,  True,  True, False, False],
-           [False, False,  True,  True,  True,  True, False, False]])
-    >>> print(stft(signal, size=4, shift=2, fading=False, window=np.ones))
-    [[ 0.+0.j  0.+0.j  0.+0.j]
-     [ 1.+0.j  0.+1.j -1.+0.j]
-     [-2.+0.j  3.-1.j -4.+0.j]
-     [ 2.+0.j -8.+0.j  2.+0.j]
-     [ 5.+0.j  5.+0.j  5.+0.j]
-     [ 0.+0.j  0.+0.j  0.+0.j]]
-    >>> activity_time_to_frequency(vad, stft_window_length=4, stft_shift=2, stft_fading=False)
-    array([False,  True,  True,  True,  True, False])
-    >>> activity_time_to_frequency([vad, vad], stft_window_length=4, stft_shift=2, stft_fading=False)
-    array([[False,  True,  True,  True,  True, False],
-           [False,  True,  True,  True,  True, False]])
-
-
-    >>> activity_time_to_frequency(np.zeros(200000), stft_window_length=1024, stft_shift=256, stft_fading=False, stft_pad=False).shape
-    (778,)
-    >>> from nara_wpe.utils import stft
-    >>> stft(np.zeros(200000), size=1024, shift=256, fading=False, pad=False).shape
-    (778, 513)
-    """
     assert np.asarray(time_activity).dtype != np.object, (
         type(time_activity),
         np.asarray(time_activity).dtype,

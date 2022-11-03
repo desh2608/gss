@@ -130,11 +130,9 @@ def morph(operation, array, reduce=None, **shape_hints):
     # Transpose
     transposition_operation = operation.replace("1", " ").replace("*", " ")
     try:
-        array = cp.asnumpy(array)
         in_shape, out_shape, (array,) = _parse_einsum_input(
-            [transposition_operation.replace(" ", ""), array]
+            [transposition_operation.replace(" ", ""), array.get()]
         )
-        array = cp.asarray(array)
 
         if len(set(in_shape) - set(out_shape)) > 0:
             assert reduce is not None, (
