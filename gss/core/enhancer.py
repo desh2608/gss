@@ -204,13 +204,16 @@ class Enhancer:
 
         # Iterate over batches
         futures = []
+        total_processed = 0
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             for batch_idx, batch in enumerate(dl):
                 batch = SimpleNamespace(**batch)
                 logging.info(
                     f"Processing batch {batch_idx+1} {batch.recording_id, batch.speaker}: "
-                    f"{len(batch.orig_cuts)} segments = {batch.duration}s"
+                    f"{len(batch.orig_cuts)} segments = {batch.duration}s (total: {total_processed} segments)"
                 )
+                total_processed += len(batch.orig_cuts)
+
                 out_dir = exp_dir / batch.recording_id
                 out_dir.mkdir(parents=True, exist_ok=True)
 
