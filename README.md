@@ -28,8 +28,7 @@ to maximize GPU memory usage and provide additional speed-up.
 * The GSS implementation (see `gss/core`) has been stripped of CHiME-6 dataset-specific peculiarities
 (such as array naming conventions etc.)
 * We use Lhotse for simplified data loading, speaker activity generation, and RTTM representation. We provide
-examples in the `recipes` directory for how to use the `gss` module for several datasets. We
-are currently aiming to support LibriCSS, AMI, and AliMeeting.
+examples in the `recipes` directory for how to use the `gss` module for several datasets.
 * The inference can be done on multi-node GPU environment. This makes it several times faster than the
 original CPU implementation.
 * We provide both Python modules and CLI for using the enhancement functions, which can be
@@ -49,10 +48,10 @@ conda create -n gss python=3.8
 ```
 
 Install CuPy as follows (see https://docs.cupy.dev/en/stable/install.html for the appropriate version
-for your CUDA).
+for your CUDA). Note that the following installs a pre-release version.
 
 ```bash
-pip install cupy-cuda102
+pip install cupy-cuda102 --pre -f https://pip.cupy.dev/pre
 ```
 
 ### Install (basic)
@@ -140,6 +139,8 @@ for downstream ASR tasks, for example.
 
 * `--profiler-output`: Optional path to output stats file for profiling, which can be visualized
 using Snakeviz.
+
+* `--force-overwrite`: Flag to force enhanced audio files to be overwritten.
 
 ## Other details
 

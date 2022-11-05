@@ -1,3 +1,4 @@
+import cupy as cp
 import numpy as np
 
 
@@ -40,13 +41,7 @@ def segment_axis(
     :return:
 
     """
-
-    if x.__class__.__module__ == "cupy._core.core":
-        import cupy
-
-        xp = cupy
-    else:
-        xp = np
+    xp = cp.get_array_module(x)
 
     axis = axis % x.ndim
 
@@ -106,18 +101,9 @@ def segment_axis(
     strides = list(x.strides)
     strides.insert(axis, shift * strides[axis])
 
-    # Alternative to np.ndarray.__new__
-    # I am not sure if np.lib.stride_tricks.as_strided is better.
-    # return np.lib.stride_tricks.as_strided(
-    #     x, shape=shape, strides=strides)
     try:
-        if xp == np:
-            x = np.lib.stride_tricks.as_strided(x, strides=strides, shape=shape)
-        else:
-            x = x.view()
-            x._set_shape_and_strides(shape, strides, True, True)
-        # return np.ndarray.__new__(np.ndarray, strides=strides,
-        #                           shape=shape, buffer=x, dtype=x.dtype)
+        x = xp.lib.stride_tricks.as_strided(x, strides=strides, shape=shape)
+
     except Exception:
         print("strides:", x.strides, " -> ", strides)
         print("shape:", x.shape, " -> ", shape)

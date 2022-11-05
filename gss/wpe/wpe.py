@@ -7,92 +7,13 @@ import operator
 import cupy as cp
 import numpy as np
 
+from gss.utils.numpy_utils import segment_axis
+
 
 def get_working_shape(shape):
     "Flattens all but the last two dimension."
     product = functools.reduce(operator.mul, [1] + list(shape[:-2]))
     return [product] + list(shape[-2:])
-
-
-def segment_axis(
-    x,
-    length,
-    shift,
-    axis=-1,
-    end="cut",  # in ['pad', 'cut', None]
-    pad_mode="constant",
-    pad_value=0,
-):
-    ndim = x.ndim
-
-    axis = axis % ndim
-
-    # Implement negative shift with a positive shift and a flip
-    # stride_tricks does not work correct with negative stride
-    if shift > 0:
-        do_flip = False
-    elif shift < 0:
-        do_flip = True
-        shift = abs(shift)
-    else:
-        raise ValueError(shift)
-
-    if pad_mode == "constant":
-        pad_kwargs = {"constant_values": pad_value}
-    else:
-        pad_kwargs = {}
-
-    # Pad
-    if end == "pad":
-        if x.shape[axis] < length:
-            npad = np.zeros([ndim, 2], dtype=np.int)
-            npad[axis, 1] = length - x.shape[axis]
-            x = cp.pad(x, pad_width=npad, mode=pad_mode, **pad_kwargs)
-        elif shift != 1 and (x.shape[axis] + shift - length) % shift != 0:
-            npad = np.zeros([ndim, 2], dtype=np.int)
-            npad[axis, 1] = shift - ((x.shape[axis] + shift - length) % shift)
-            x = cp.pad(x, pad_width=npad, mode=pad_mode, **pad_kwargs)
-
-    elif end == "conv_pad":
-        assert shift == 1, shift
-        npad = np.zeros([ndim, 2], dtype=np.int)
-        npad[axis, :] = length - shift
-        x = cp.pad(x, pad_width=npad, mode=pad_mode, **pad_kwargs)
-    elif end is None:
-        assert (
-            x.shape[axis] + shift - length
-        ) % shift == 0, "{} = x.shape[axis]({}) + shift({}) - length({})) % shift({})" "".format(
-            (x.shape[axis] + shift - length) % shift,
-            x.shape[axis],
-            shift,
-            length,
-            shift,
-        )
-    elif end == "cut":
-        pass
-    else:
-        raise ValueError(end)
-
-    # Calculate desired shape and strides
-    shape = list(x.shape)
-    # assert shape[axis] >= length, shape
-    del shape[axis]
-    shape.insert(axis, (x.shape[axis] + shift - length) // shift)
-    shape.insert(axis + 1, length)
-
-    def get_strides(array):
-        return list(array.strides)
-
-    strides = get_strides(x)
-    strides.insert(axis, shift * strides[axis])
-
-    x = x.view()
-    x._set_shape_and_strides(shape, strides, True, True)
-
-    if do_flip:
-        return cp.flip(x, axis=axis)
-    else:
-        return x
 
 
 def _stable_solve(A, B):
@@ -214,7 +135,7 @@ def _stable_positive_inverse(power):
         # The scale of the power does not matter, so take 1.
         inverse_power = cp.ones_like(power)
     else:
-        cp.clip(power, a_min=eps, out=power)
+        cp.clip(power, a_min=eps, a_max=None, out=power)
         inverse_power = 1 / power
     return inverse_power
 

@@ -42,10 +42,6 @@ def get_enhancer(
     bss_iterations_post=1,
     bf_drop_context=True,
     postfilter=None,
-    max_batch_duration=None,
-    max_batch_cuts=None,
-    num_buckets=2,
-    num_workers=1,
 ):
     assert wpe is True or wpe is False, wpe
     assert len(cuts) > 0
@@ -78,10 +74,6 @@ def get_enhancer(
         stft_shift=stft_shift,
         stft_fading=stft_fading,
         sampling_rate=sampling_rate,
-        max_batch_duration=max_batch_duration,
-        max_batch_cuts=max_batch_cuts,
-        num_buckets=num_buckets,
-        num_workers=num_workers,
     )
 
 
@@ -106,11 +98,6 @@ class Enhancer:
     context_duration: float  # e.g. 15
     sampling_rate: int
 
-    max_batch_duration: float = None
-    max_batch_cuts: int = None
-    num_buckets: int = 2
-    num_workers: int = 1
-
     def stft(self, x):
         from gss.core.stft_module import stft
 
@@ -131,7 +118,16 @@ class Enhancer:
             fading=self.stft_fading,
         )
 
-    def enhance_cuts(self, cuts, exp_dir):
+    def enhance_cuts(
+        self,
+        cuts,
+        exp_dir,
+        max_batch_duration=None,
+        max_batch_cuts=None,
+        num_buckets=2,
+        num_workers=1,
+        force_overwrite=False,
+    ):
         """
         Enhance the given CutSet.
         """
@@ -144,15 +140,15 @@ class Enhancer:
         )
         gss_sampler = create_sampler(
             cuts,
-            max_duration=self.max_batch_duration,
-            max_cuts=self.max_batch_cuts,
-            num_buckets=self.num_buckets,
+            max_duration=max_batch_duration,
+            max_cuts=max_batch_cuts,
+            num_buckets=num_buckets,
         )
         dl = DataLoader(
             gss_dataset,
             sampler=gss_sampler,
             batch_size=None,
-            num_workers=self.num_workers,
+            num_workers=num_workers,
             persistent_workers=False,
         )
 
@@ -165,7 +161,7 @@ class Enhancer:
                 save_path = Path(
                     f"{recording_id}-{speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
                 )
-                if not (out_dir / save_path).exists():
+                if force_overwrite or not (out_dir / save_path).exists():
                     st = compute_num_samples(offset, self.sampling_rate)
                     en = st + compute_num_samples(cut.duration, self.sampling_rate)
                     x_hat_cut = x_hat[:, st:en]
@@ -205,7 +201,7 @@ class Enhancer:
         # Iterate over batches
         futures = []
         total_processed = 0
-        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+        with ThreadPoolExecutor(max_workers=num_workers) as executor:
             for batch_idx, batch in enumerate(dl):
                 batch = SimpleNamespace(**batch)
                 logging.info(
@@ -218,15 +214,16 @@ class Enhancer:
                 out_dir.mkdir(parents=True, exist_ok=True)
 
                 file_exists = []
-                for cut in batch.orig_cuts:
-                    save_path = Path(
-                        f"{batch.recording_id}-{batch.speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
-                    )
-                    file_exists.append((out_dir / save_path).exists())
+                if not force_overwrite:
+                    for cut in batch.orig_cuts:
+                        save_path = Path(
+                            f"{batch.recording_id}-{batch.speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
+                        )
+                        file_exists.append((out_dir / save_path).exists())
 
-                if all(file_exists):
-                    logging.info("All files already exist. Skipping.")
-                    continue
+                    if all(file_exists):
+                        logging.info("All files already exist. Skipping.")
+                        continue
 
                 # Sometimes the segment may be large and cause OOM issues in CuPy. If this
                 # happens, we increasingly chunk it up into smaller segments until it can
@@ -355,7 +352,7 @@ class Enhancer:
         X_hat = cp.concatenate(X_hat, axis=0)
 
         logging.debug("Computing inverse STFT")
-        x_hat = self.istft(X_hat)
+        x_hat = self.istft(X_hat)  # returns a numpy array
 
         if x_hat.ndim == 1:
             x_hat = x_hat[np.newaxis, :]
@@ -363,4 +360,4 @@ class Enhancer:
         # Trim x_hat to original length of cut
         x_hat = x_hat[:, left_context:-right_context]
 
-        return cp.asnumpy(x_hat)
+        return x_hat

@@ -5,6 +5,7 @@ import typing
 from math import ceil
 
 import cupy as cp
+import cupyx as cpx
 import numpy as np
 from cupy.fft import irfft, rfft
 
@@ -153,16 +154,21 @@ def istft(
     window = cp.blackman(window_length + 1)[:-1]
     window = _biorthogonal_window_brute_force(window, shift)
 
-    time_signal = cp.zeros(
+    # In the following, we use numpy.add.at since cupyx.scatter_add does not seem to be
+    # giving the same results. We should replace this with cupy.add.at once it is
+    # available in the stable release (see: https://github.com/cupy/cupy/pull/7077).
+
+    time_signal = np.zeros(
         (*stft_signal.shape[:-2], stft_signal.shape[-2] * shift + window_length - shift)
     )
 
     # Get the correct view to time_signal
     time_signal_seg = segment_axis(time_signal, window_length, shift, end=None)
 
-    time_signal_seg = cp.add(
+    np.add.at(
         time_signal_seg,
-        window * cp.real(irfft(stft_signal, n=size))[..., :window_length],
+        ...,
+        (window * cp.real(irfft(stft_signal, n=size))[..., :window_length]).get(),
     )
     # The [..., :window_length] is the inverse of the window padding in rfft.
 

@@ -29,7 +29,7 @@ dev_requires = [
 
 setup(
     name="gss",
-    version="0.6.0",
+    version="0.6.1",
     description="GPU-accelerated Guided Source Separation",
     long_description=long_description,
     long_description_content_type="text/markdown",
