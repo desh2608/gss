@@ -111,6 +111,12 @@ def common_options(func):
         default=None,
         help="Path to the profiler output file.",
     )
+    @click.option(
+        "--force-overwrite",
+        is_flag=True,
+        default=False,
+        help="If set, we will overwrite the enhanced audio files if they already exist.",
+    )
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -148,6 +154,7 @@ def cuts_(
     num_buckets,
     enhanced_manifest,
     profiler_output,
+    force_overwrite,
 ):
     """
     Enhance segments (represented by cuts).
@@ -195,15 +202,19 @@ def cuts_(
         bss_iterations=bss_iterations,
         context_duration=context_duration,
         activity_garbage_class=use_garbage_class,
-        max_batch_duration=max_batch_duration,
-        max_batch_cuts=max_batch_cuts,
-        num_workers=num_workers,
-        num_buckets=num_buckets,
     )
 
     logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")
     begin = time.time()
-    num_errors, out_cuts = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
+    num_errors, out_cuts = enhancer.enhance_cuts(
+        cuts_per_segment,
+        enhanced_dir,
+        max_batch_duration=max_batch_duration,
+        max_batch_cuts=max_batch_cuts,
+        num_workers=num_workers,
+        num_buckets=num_buckets,
+        force_overwrite=force_overwrite,
+    )
     end = time.time()
     logger.info(f"Finished in {end-begin:.2f}s with {num_errors} errors")
 
@@ -250,6 +261,7 @@ def recording_(
     num_buckets,
     enhanced_manifest,
     profiler_output,
+    force_overwrite,
 ):
     """
     Enhance a single recording using an RTTM file.
@@ -310,15 +322,19 @@ def recording_(
         bss_iterations=bss_iterations,
         context_duration=context_duration,
         activity_garbage_class=use_garbage_class,
-        max_batch_duration=max_batch_duration,
-        max_batch_cuts=max_batch_cuts,
-        num_workers=num_workers,
-        num_buckets=num_buckets,
     )
 
     logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")
     begin = time.time()
-    num_errors, out_cuts = enhancer.enhance_cuts(cuts_per_segment, enhanced_dir)
+    num_errors, out_cuts = enhancer.enhance_cuts(
+        cuts_per_segment,
+        enhanced_dir,
+        max_batch_duration=max_batch_duration,
+        max_batch_cuts=max_batch_cuts,
+        num_workers=num_workers,
+        num_buckets=num_buckets,
+        force_overwrite=force_overwrite,
+    )
     end = time.time()
     logger.info(f"Finished in {end-begin:.2f}s with {num_errors} errors")
 

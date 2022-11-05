@@ -92,7 +92,12 @@ class ComplexAngularCentralGaussianTrainer:
             denominator = cp.einsum("...n->...", saliency)[..., None, None]
 
         # Set 0 values in denominator to small epsilon to avoid division by 0
-        cp.clip(denominator, a_min=cp.finfo(denominator.dtype).tiny, out=denominator)
+        cp.clip(
+            denominator,
+            a_min=cp.finfo(denominator.dtype).tiny,
+            a_max=None,
+            out=denominator,
+        )
 
         # When the covariance matrix is zero, quadratic_form would also zero.
         # quadratic_form have to be positive
@@ -100,6 +105,7 @@ class ComplexAngularCentralGaussianTrainer:
             quadratic_form,
             # Use 2 * tiny, because tiny is to small
             a_min=10 * cp.finfo(quadratic_form.dtype).tiny,
+            a_max=None,
             out=quadratic_form,
         )
 
