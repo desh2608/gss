@@ -142,10 +142,25 @@ using Snakeviz.
 
 * `--force-overwrite`: Flag to force enhanced audio files to be overwritten.
 
-## Other details
+## FAQ
 
-Internally, we also have a fallback option to chunk up batches into increasingly smaller
-parts in case OOM error is encountered (see `gss.core.enhancer.py` ).
+**What happens if I set the `--max-batch-duration` too large?**
+
+The enhancement would still work, but you will see several warnings of the sort:
+"Out of memory error while processing the batch. Trying again with <num-chunks> chunks.`
+Internally, we have a fallback option to chunk up batches into increasingly smaller
+parts in case OOM error is encountered (see `gss.core.enhancer.py`). However, this
+would slow down processing, so we recommend reducing the batch size if you see this
+warning very frequently.
+
+**I am seeing "out of memory error" a lot. What should I do?**
+
+Try reducing `--max-batch-duration`. If you are enhancing a large number of very small
+segments, try providing `--max-batch-cuts` with some small value (e.g., 2 or 3). This
+is because batching together a large number of small segments requires memory
+overhead which can cause OOMs.
+
+**How to understand the format of output file names?**
 
 The enhanced wav files are named as *recoid-spkid-start_end.wav*, i.e., 1 wav file is
 generated for each segment in the RTTM. The "start" and "end" are padded to 6 digits,
@@ -153,10 +168,14 @@ for example: 21.18 seconds is encoded as `002118` . This convention should be fi
 your audio duration is under ~2.75 h (9999s), otherwise, you should change the
 padding in `gss/core/enhancer.py` .
 
+** How should I generate RTTMs required for enhancement?**
+
 For examples of how to generate RTTMs for guiding the separation, please refer to my
 [diarizer](https://github.com/desh2608/diarizer) toolkit.
 
-**Additional parameters:** We have only made the most important parameters available in the
+**How can I experiment with additional GSS parameters?**
+
+We have only made the most important parameters available in the
 top-level CLI. To play with other parameters, check out the `gss.enhancer.get_enhancer()` function.
 
 ## Contributing
