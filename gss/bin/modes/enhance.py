@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 
 import click
-from lhotse import Recording, SupervisionSet, load_manifest
+from lhotse import Recording, SupervisionSet, load_manifest_lazy
 from lhotse.cut import CutSet
 from lhotse.utils import fastcopy
 
@@ -41,6 +41,12 @@ def common_options(func):
         type=int,
         default=10,
         help="Number of iterations for BSS",
+        show_default=True,
+    )
+    @click.option(
+        "--use-wpe/--no-wpe",
+        default=True,
+        help="Whether to use WPE for GSS",
         show_default=True,
     )
     @click.option(
@@ -144,6 +150,7 @@ def cuts_(
     enhanced_dir,
     channels,
     bss_iterations,
+    use_wpe,
     context_duration,
     use_garbage_class,
     min_segment_length,
@@ -182,12 +189,15 @@ def cuts_(
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)
 
-    cuts = load_manifest(cuts_per_recording)
-    cuts_per_segment = load_manifest(cuts_per_segment)
+    cuts = load_manifest_lazy(cuts_per_recording)
+    cuts_per_segment = load_manifest_lazy(cuts_per_segment)
 
     if channels is not None:
         channels = [int(c) for c in channels.split(",")]
-        cuts = CutSet.from_cuts(fastcopy(cut, channel=channels) for cut in cuts)
+        cuts_per_segment = CutSet.from_cuts(
+            fastcopy(cut, channel=channels) for cut in cuts_per_segment
+        )
+
     # Paranoia mode: ensure that cuts_per_recording have ids same as the recording_id
     cuts = CutSet.from_cuts(cut.with_id(cut.recording_id) for cut in cuts)
 
@@ -202,6 +212,7 @@ def cuts_(
         bss_iterations=bss_iterations,
         context_duration=context_duration,
         activity_garbage_class=use_garbage_class,
+        wpe=use_wpe,
     )
 
     logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")
@@ -251,6 +262,7 @@ def recording_(
     recording_id,
     channels,
     bss_iterations,
+    use_wpe,
     context_duration,
     use_garbage_class,
     min_segment_length,
@@ -322,6 +334,7 @@ def recording_(
         bss_iterations=bss_iterations,
         context_duration=context_duration,
         activity_garbage_class=use_garbage_class,
+        wpe=use_wpe,
     )
 
     logger.info(f"Enhancing {len(frozenset(c.id for c in cuts_per_segment))} segments")

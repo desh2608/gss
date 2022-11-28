@@ -62,11 +62,12 @@ if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
           $EXP_DIR/cuts.jsonl.gz $EXP_DIR/split$nj/cuts_per_segment.JOB.jsonl.gz \
           $EXP_DIR/enhanced \
           --use-garbage-class \
-          --channels 0,2,4,6 \
+          --channels 0,1,2,3,4,5,6 \
           --bss-iterations 10 \
-          --context-duration 10.0 \
-          --min-segment-length 0.0 \
+          --context-duration 15.0 \
+          --min-segment-length 0.1 \
           --max-segment-length 15.0 \
-          --max-batch-duration 50.0 \
-          --num-buckets 3
+          --max-batch-duration 20.0 \
+          --num-buckets 3 \
+          --force-overwrite
 fi
