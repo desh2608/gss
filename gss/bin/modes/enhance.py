@@ -5,6 +5,7 @@ from pathlib import Path
 
 import click
 from lhotse import Recording, SupervisionSet, load_manifest_lazy
+from lhotse.audio import set_audio_duration_mismatch_tolerance
 from lhotse.cut import CutSet
 from lhotse.utils import fastcopy
 
@@ -144,6 +145,13 @@ def common_options(func):
     type=click.Path(),
 )
 @common_options
+@click.option(
+    "--duration-tolerance",
+    type=float,
+    default=None,
+    help="Maximum mismatch between channel durations to allow. Some corpora like CHiME-6 "
+    "need a large value, e.g., 2 seconds"
+)
 def cuts_(
     cuts_per_recording,
     cuts_per_segment,
@@ -162,6 +170,7 @@ def cuts_(
     enhanced_manifest,
     profiler_output,
     force_overwrite,
+    duration_tolerance,
 ):
     """
     Enhance segments (represented by cuts).
@@ -185,6 +194,9 @@ def cuts_(
             pstats.Stats(pr).sort_stats("cumulative").dump_stats(profiler_output)
 
         atexit.register(exit)
+
+    if duration_tolerance is not None:
+        set_audio_duration_mismatch_tolerance(duration_tolerance)
 
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)
