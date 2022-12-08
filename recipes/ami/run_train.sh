@@ -34,7 +34,7 @@ fi
 
 if [ $stage -le 3 ]; then
     echo "Stage 3: Split segments into $nj parts"
-    lhotse split --no-pad $nj $EXP_DIR/cuts_per_segment.jsonl.gz $EXP_DIR/split$nj
+    gss utils split $nj $EXP_DIR/cuts_per_segment.jsonl.gz $EXP_DIR/split$nj
 fi
 
 if [ $stage -le 4 ]; then

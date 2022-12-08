@@ -53,7 +53,7 @@ fi
 
 if [ $stage -le 4 ] && [ $stop_stage -ge 4 ]; then
     echo "Stage 4: Split segments into $nj parts"
-    gss utils split --no-pad $nj $EXP_DIR/cuts_per_segment.jsonl.gz $EXP_DIR/split$nj
+    gss utils split $nj $EXP_DIR/cuts_per_segment.jsonl.gz $EXP_DIR/split$nj
 fi
 
 if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
