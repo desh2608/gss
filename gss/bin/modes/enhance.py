@@ -150,7 +150,7 @@ def common_options(func):
     type=float,
     default=None,
     help="Maximum mismatch between channel durations to allow. Some corpora like CHiME-6 "
-    "need a large value, e.g., 2 seconds"
+    "need a large value, e.g., 2 seconds",
 )
 def cuts_(
     cuts_per_recording,
