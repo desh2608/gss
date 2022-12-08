@@ -178,6 +178,12 @@ For examples of how to generate RTTMs for guiding the separation, please refer t
 We have only made the most important parameters available in the
 top-level CLI. To play with other parameters, check out the `gss.enhancer.get_enhancer()` function.
 
+**How much speed-up can I expect to obtain?**
+
+Enhancing the CHiME-6 dev set required 1.3 hours on 4 GPUs. This is as opposed to the
+original implementation which required 20 hours using 80 CPU jobs. This is an effective 
+speed-up of 292.
+
 ## Contributing
 
 Contributions for core improvements or new recipes are welcome. Please run the following
@@ -190,18 +196,4 @@ pre-commit run # Running linter checks
 
 ## Citations
 
-Please refer to the [original](https://github.com/fgnt/pb_chime5) repository for papers
-related to GSS. If you used this code for your work, consider citing the repo by clicking on
-**Cite this repository**.
-
-You can also cite our CHiME-6 paper which used diarization-based GSS for multi-talker speech reognition.
-
-```
-@article{Arora2020TheJM,
-  title={The JHU Multi-Microphone Multi-Speaker ASR System for the CHiME-6 Challenge},
-  author={Ashish Arora and Desh Raj and Aswin Shanmugam Subramanian and Ke Li and Bar Ben-Yair and Matthew Maciejewski and Piotr Żelasko and Paola Garc{\'i}a and Shinji Watanabe and Sanjeev Khudanpur},
-  journal={ArXiv},
-  year={2020},
-  volume={abs/2006.07898}
-}
-```
+Coming soon.
