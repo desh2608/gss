@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import cupy as cp
 import numpy as np
+import torch
 import soundfile as sf
 from lhotse import CutSet, Recording, RecordingSet, SupervisionSegment, SupervisionSet
 from lhotse.utils import add_durations, compute_num_samples
@@ -99,24 +100,44 @@ class Enhancer:
     sampling_rate: int
 
     def stft(self, x):
-        from gss.core.stft_module import stft
+        # from gss.core.stft_module import stft as stft1
 
-        return stft(
-            x,
-            size=self.stft_size,
-            shift=self.stft_shift,
-            fading=self.stft_fading,
+        # stft1 = stft1(
+        #     x,
+        #     size=self.stft_size,
+        #     shift=self.stft_shift,
+        #     fading=self.stft_fading,
+        # )
+        y = torch.stft(
+            torch.as_tensor(x, device="cuda"),
+            n_fft=self.stft_size,
+            hop_length=self.stft_shift,
+            win_length=self.stft_size,
+            window=torch.hamming_window(self.stft_size),
+            return_complex=True,
+            center=False,
+            pad_mode="constant",
         )
+        return cp.asarray(y)
 
     def istft(self, X):
-        from gss.core.stft_module import istft
+        # from gss.core.stft_module import istft
 
-        return istft(
-            X,
-            size=self.stft_size,
-            shift=self.stft_shift,
-            fading=self.stft_fading,
+        # return istft(
+        #     X,
+        #     size=self.stft_size,
+        #     shift=self.stft_shift,
+        #     fading=self.stft_fading,
+        # )
+        Y = torch.istft(
+            torch.as_tensor(X),
+            n_fft=self.stft_size,
+            hop_length=self.stft_shift,
+            win_length=self.stft_size,
+            window=torch.hamming_window(self.stft_size),
+            center=False,
         )
+        return Y.cpu().numpy()
 
     def enhance_cuts(
         self,
@@ -132,7 +153,6 @@ class Enhancer:
         Enhance the given CutSet.
         """
         num_error = 0
-        out_cuts = []  # list of enhanced cuts
 
         # Create the dataset, sampler, and data loader
         gss_dataset = GssDataset(
