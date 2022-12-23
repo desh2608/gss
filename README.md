@@ -196,4 +196,10 @@ pre-commit run # Running linter checks
 
 ## Citations
 
-Coming soon.
+```
+@inproceedings{Raj2022GPUacceleratedGS,
+  title={GPU-accelerated Guided Source Separation for Meeting Transcription},
+  author={Desh Raj and Daniel Povey and Sanjeev Khudanpur},
+  year={2022}
+}
+```
