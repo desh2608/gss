@@ -51,7 +51,11 @@ Install CuPy as follows (see https://docs.cupy.dev/en/stable/install.html for th
 for your CUDA). Note that the following installs a pre-release version.
 
 ```bash
-pip install cupy-cuda102 --pre -f https://pip.cupy.dev/pre
+pip install cupy-cuda102 --pre -f https://pip.cupy.dev/pre 
+```
+NOTE: if you don't have cudatoolkit 10.2 installed, you can use conda which will install it for you:
+```bash
+conda install -c conda-forge cupy=10.2
 ```
 
 ### Install (basic)
