@@ -51,9 +51,11 @@ Install CuPy as follows (see https://docs.cupy.dev/en/stable/install.html for th
 for your CUDA). Note that the following installs a pre-release version.
 
 ```bash
-pip install cupy-cuda102 --pre -f https://pip.cupy.dev/pre 
+pip install cupy-cuda102 --pre -f https://pip.cupy.dev/pre
 ```
+
 NOTE: if you don't have cudatoolkit 10.2 installed, you can use conda which will install it for you:
+
 ```bash
 conda install -c conda-forge cupy=10.2
 ```
@@ -110,7 +112,7 @@ SLURM.
 
 6. Run the enhancement on GPUs. The following options can be provided:
 
-* `--num-channels`: Number of channels to use for enhancement. By default, all channels are used.
+* `--channels`: The channels to use for enhancement (comma-separated ints). By default, all channels are used.
 
 * `--bss-iteration`: Number of iterations of the CACGMM inference.
 
@@ -153,13 +155,13 @@ using Snakeviz.
 The enhancement would still work, but you will see several warnings of the sort:
 "Out of memory error while processing the batch. Trying again with <num-chunks> chunks.`
 Internally, we have a fallback option to chunk up batches into increasingly smaller
-parts in case OOM error is encountered (see `gss.core.enhancer.py`). However, this
+parts in case OOM error is encountered (see `gss.core.enhancer.py` ). However, this
 would slow down processing, so we recommend reducing the batch size if you see this
 warning very frequently.
 
 **I am seeing "out of memory error" a lot. What should I do?**
 
-Try reducing `--max-batch-duration`. If you are enhancing a large number of very small
+Try reducing `--max-batch-duration` . If you are enhancing a large number of very small
 segments, try providing `--max-batch-cuts` with some small value (e.g., 2 or 3). This
 is because batching together a large number of small segments requires memory
 overhead which can cause OOMs.
@@ -171,6 +173,13 @@ generated for each segment in the RTTM. The "start" and "end" are padded to 6 di
 for example: 21.18 seconds is encoded as `002118` . This convention should be fine if
 your audio duration is under ~2.75 h (9999s), otherwise, you should change the
 padding in `gss/core/enhancer.py` .
+
+**How to solve the Lhotse AudioDurationMismatch error?**
+
+This error is raised when the audio files corresponding to different channels have
+different durations. This is often the case for multi-array recordings, e.g., CHiME-6.
+You can bypass this error by setting the `--duration-tolerance` option to some larger
+value (Lhotse's default is 0.025). For CHiME-6, we had to set this to 3.0.
 
 ** How should I generate RTTMs required for enhancement?**
 
@@ -185,7 +194,7 @@ top-level CLI. To play with other parameters, check out the `gss.enhancer.get_en
 **How much speed-up can I expect to obtain?**
 
 Enhancing the CHiME-6 dev set required 1.3 hours on 4 GPUs. This is as opposed to the
-original implementation which required 20 hours using 80 CPU jobs. This is an effective 
+original implementation which required 20 hours using 80 CPU jobs. This is an effective
 speed-up of 292.
 
 ## Contributing
