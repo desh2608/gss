@@ -181,7 +181,7 @@ different durations. This is often the case for multi-array recordings, e.g., CH
 You can bypass this error by setting the `--duration-tolerance` option to some larger
 value (Lhotse's default is 0.025). For CHiME-6, we had to set this to 3.0.
 
-** How should I generate RTTMs required for enhancement?**
+**How should I generate RTTMs required for enhancement?**
 
 For examples of how to generate RTTMs for guiding the separation, please refer to my
 [diarizer](https://github.com/desh2608/diarizer) toolkit.
