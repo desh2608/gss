@@ -11,7 +11,7 @@ from lhotse import CutSet, Recording, RecordingSet, SupervisionSegment, Supervis
 from lhotse.utils import add_durations, compute_num_samples
 from torch.utils.data import DataLoader
 
-from gss.core import GSS, WPE, Activity, Beamformer
+from gss.core import GSS, WPE, Activity, Beamformer, EnvelopeVarianceChannelSelector
 from gss.utils.data_utils import (
     GssDataset,
     activity_time_to_frequency,
@@ -62,6 +62,9 @@ def get_enhancer(
             garbage_class=activity_garbage_class,
             cuts=cuts,
         ),
+        channel_selector=EnvelopeVarianceChannelSelector(
+            n_fft=stft_size // 2 + 1, hop_length=stft_shift, sampling_rate=sampling_rate
+        ),
         gss_block=GSS(
             iterations=bss_iterations,
             iterations_post=bss_iterations_post,
@@ -86,6 +89,7 @@ class Enhancer:
 
     wpe_block: WPE
     activity: Activity
+    channel_selector: EnvelopeVarianceChannelSelector
     gss_block: GSS
     bf_block: Beamformer
 
@@ -127,6 +131,8 @@ class Enhancer:
         num_buckets=2,
         num_workers=1,
         force_overwrite=False,
+        select_channels_by_count=None,
+        select_channels_by_ratio=None,
     ):
         """
         Enhance the given CutSet.
@@ -238,6 +244,8 @@ class Enhancer:
                             num_chunks=num_chunks,
                             left_context=batch.left_context,
                             right_context=batch.right_context,
+                            select_channels_by_count=select_channels_by_count,
+                            select_channels_by_ratio=select_channels_by_ratio,
                         )
                         break
                     except cp.cuda.memory.OutOfMemoryError:
@@ -280,7 +288,15 @@ class Enhancer:
         )
 
     def enhance_batch(
-        self, obs, activity, speaker_id, num_chunks=1, left_context=0, right_context=0
+        self,
+        obs,
+        activity,
+        speaker_id,
+        num_chunks=1,
+        left_context=0,
+        right_context=0,
+        select_channels_by_count=None,
+        select_channels_by_ratio=None,
     ):
 
         logging.debug(f"Converting activity to frequency domain")
@@ -297,6 +313,18 @@ class Enhancer:
 
         logging.debug(f"Computing STFT")
         Obs = self.stft(obs)
+
+        if select_channels_by_count is not None or select_channels_by_ratio is not None:
+            if select_channels_by_ratio:
+                D = Obs.shape[0]
+                select_channels_by_count = min(
+                    max(2, int(select_channels_by_ratio * D)), D
+                )
+
+            Obs, selected_channels = self.channel_selector(
+                Obs, num_channels=select_channels_by_count
+            )
+            logging.debug(f"Selected channels: {selected_channels}")
 
         D, T, F = Obs.shape
 
