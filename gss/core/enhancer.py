@@ -311,6 +311,8 @@ class Enhancer:
             logging.debug(f"Applying WPE")
             if self.wpe_block is not None:
                 Obs_chunk = self.wpe_block(Obs_chunk)
+                # Replace the chunk in the original array (to save memory)
+                Obs[:, st:en, :] = Obs_chunk
 
             logging.debug(f"Computing GSS masks")
             masks_chunk = self.gss_block(Obs_chunk, activity_freq[:, st:en])
