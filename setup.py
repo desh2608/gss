@@ -41,7 +41,7 @@ setup(
     install_requires=[
         "cached_property",
         "numpy",
-        "lhotse @ git+http://github.com/lhotse-speech/lhotse",
+        "lhotse",
     ],
     extras_require={
         "dev": dev_requires,

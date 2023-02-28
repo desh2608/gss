@@ -159,7 +159,7 @@ class Enhancer:
             offset = 0
             for cut in orig_cuts:
                 save_path = Path(
-                    f"{recording_id}-{speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
+                    f"{recording_id}-{speaker}-{round(100*cut.start):06d}_{round(100*cut.end):06d}.flac"
                 )
                 if force_overwrite or not (out_dir / save_path).exists():
                     st = compute_num_samples(offset, self.sampling_rate)
@@ -217,7 +217,7 @@ class Enhancer:
                 if not force_overwrite:
                     for cut in batch.orig_cuts:
                         save_path = Path(
-                            f"{batch.recording_id}-{batch.speaker}-{int(100*cut.start):06d}_{int(100*cut.end):06d}.flac"
+                            f"{batch.recording_id}-{batch.speaker}-{round(100*cut.start):06d}_{round(100*cut.end):06d}.flac"
                         )
                         file_exists.append((out_dir / save_path).exists())
 
