@@ -48,13 +48,15 @@ conda create -n gss python=3.8
 ```
 
 Install CuPy as follows (see https://docs.cupy.dev/en/stable/install.html for the appropriate version
-for your CUDA). Note that the following installs a pre-release version.
+for your CUDA). 
 
 ```bash
-pip install cupy-cuda102 --pre -f https://pip.cupy.dev/pre
+pip install cupy-cuda102
 ```
 
-NOTE: if you don't have cudatoolkit 10.2 installed, you can use conda which will install it for you:
+NOTE 1: We recommend not installing the pre-release version (12.0.0rc1 at the time of writing), since there may be some issues with it.
+
+NOTE 2: if you don't have cudatoolkit 10.2 installed, you can use conda which will install it for you:
 
 ```bash
 conda install -c conda-forge cupy=10.2
