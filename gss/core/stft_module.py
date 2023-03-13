@@ -12,6 +12,14 @@ from cupy.fft import irfft, rfft
 from gss.utils.numpy_utils import roll_zeropad, segment_axis
 
 
+CUPY_MAJOR_VERSION = int(cp.__version__.split(".")[0])
+if CUPY_MAJOR_VERSION < 12:
+    print(
+        "Some functions in stft_module.py may run slower in cupy < 12. Your cupy version is",
+        cp.__version__,
+    )
+
+
 def stft(
     time_signal,
     size: int = 1024,
@@ -111,7 +119,7 @@ def _biorthogonal_window_brute_force(analysis_window, shift, use_amplitude=False
     if use_amplitude:
         analysis_window_square = analysis_window
     else:
-        analysis_window_square = analysis_window**2
+        analysis_window_square = analysis_window ** 2
     for i in range(-influence_width, influence_width + 1):
         denominator += roll_zeropad(analysis_window_square, shift * i)
 
@@ -154,22 +162,33 @@ def istft(
     window = cp.blackman(window_length + 1)[:-1]
     window = _biorthogonal_window_brute_force(window, shift)
 
-    # In the following, we use numpy.add.at since cupyx.scatter_add does not seem to be
-    # giving the same results. We should replace this with cupy.add.at once it is
-    # available in the stable release (see: https://github.com/cupy/cupy/pull/7077).
-
-    time_signal = np.zeros(
-        (*stft_signal.shape[:-2], stft_signal.shape[-2] * shift + window_length - shift)
+    # In the latest CuPy versions, the add.at function has been implemented. We still
+    # support older versions, but we have to use the slower numpy version. This will
+    # be removed in the future.
+    xp = cp if CUPY_MAJOR_VERSION >= 12 else np
+    time_signal = xp.zeros(
+        (
+            *stft_signal.shape[:-2],
+            stft_signal.shape[-2] * shift + window_length - shift,
+        ),
+        dtype=stft_signal.dtype,
     )
 
     # Get the correct view to time_signal
     time_signal_seg = segment_axis(time_signal, window_length, shift, end=None)
 
-    np.add.at(
-        time_signal_seg,
-        ...,
-        (window * cp.real(irfft(stft_signal, n=size))[..., :window_length]).get(),
-    )
+    if CUPY_MAJOR_VERSION >= 12:
+        cp.add.at(
+            time_signal_seg,
+            ...,
+            window * cp.real(irfft(stft_signal, n=size))[..., :window_length],
+        )
+    else:
+        np.add.at(
+            time_signal_seg,
+            ...,
+            (window * cp.real(irfft(stft_signal, n=size))[..., :window_length]).get(),
+        )
     # The [..., :window_length] is the inverse of the window padding in rfft.
 
     # Compensate fade-in and fade-out
@@ -183,4 +202,4 @@ def istft(
             ..., int(pad_width) : time_signal.shape[-1] - ceil(pad_width)
         ]
 
-    return time_signal
+    return cp.asnumpy(time_signal) if CUPY_MAJOR_VERSION >= 12 else time_signal
