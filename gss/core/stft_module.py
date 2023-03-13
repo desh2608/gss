@@ -5,19 +5,10 @@ import typing
 from math import ceil
 
 import cupy as cp
-import cupyx as cpx
 import numpy as np
 from cupy.fft import irfft, rfft
 
 from gss.utils.numpy_utils import roll_zeropad, segment_axis
-
-
-CUPY_MAJOR_VERSION = int(cp.__version__.split(".")[0])
-if CUPY_MAJOR_VERSION < 12:
-    print(
-        "Some functions in stft_module.py may run slower in cupy < 12. Your cupy version is",
-        cp.__version__,
-    )
 
 
 def stft(
@@ -165,30 +156,18 @@ def istft(
     # In the latest CuPy versions, the add.at function has been implemented. We still
     # support older versions, but we have to use the slower numpy version. This will
     # be removed in the future.
-    xp = cp if CUPY_MAJOR_VERSION >= 12 else np
-    time_signal = xp.zeros(
-        (
-            *stft_signal.shape[:-2],
-            stft_signal.shape[-2] * shift + window_length - shift,
-        ),
-        dtype=stft_signal.dtype,
+    time_signal = np.zeros(
+        (*stft_signal.shape[:-2], stft_signal.shape[-2] * shift + window_length - shift)
     )
 
     # Get the correct view to time_signal
     time_signal_seg = segment_axis(time_signal, window_length, shift, end=None)
 
-    if CUPY_MAJOR_VERSION >= 12:
-        cp.add.at(
-            time_signal_seg,
-            ...,
-            window * cp.real(irfft(stft_signal, n=size))[..., :window_length],
-        )
-    else:
-        np.add.at(
-            time_signal_seg,
-            ...,
-            (window * cp.real(irfft(stft_signal, n=size))[..., :window_length]).get(),
-        )
+    np.add.at(
+        time_signal_seg,
+        ...,
+        (window * cp.real(irfft(stft_signal, n=size))[..., :window_length]).get(),
+    )
     # The [..., :window_length] is the inverse of the window padding in rfft.
 
     # Compensate fade-in and fade-out
@@ -202,4 +181,4 @@ def istft(
             ..., int(pad_width) : time_signal.shape[-1] - ceil(pad_width)
         ]
 
-    return cp.asnumpy(time_signal) if CUPY_MAJOR_VERSION >= 12 else time_signal
+    return time_signal

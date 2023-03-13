@@ -245,15 +245,15 @@ class Enhancer:
                         logging.warning(
                             f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
                         )
-                    except Exception as e:
-                        logging.error(f"Error enhancing batch: {e}")
-                        num_error += 1
-                        # Keep the original signal (only load channel 0)
-                        # NOTE (@desh2608): One possible issue here is that the whole batch
-                        # may fail even if the issue is only due to one segment. We may
-                        # want to handle this case separately.
-                        x_hat = batch.audio[0:1].cpu().numpy()
-                        break
+                    # except Exception as e:
+                    #     logging.error(f"Error enhancing batch: {e}")
+                    #     num_error += 1
+                    #     # Keep the original signal (only load channel 0)
+                    #     # NOTE (@desh2608): One possible issue here is that the whole batch
+                    #     # may fail even if the issue is only due to one segment. We may
+                    #     # want to handle this case separately.
+                    #     x_hat = batch.audio[0:1].cpu().numpy()
+                    #     break
 
                 # Save the enhanced cut to disk
                 futures.append(
