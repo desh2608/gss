@@ -212,9 +212,10 @@ pre-commit run # Running linter checks
 ## Citations
 
 ```
-@inproceedings{Raj2022GPUacceleratedGS,
+@inproceedings{Raj2023GPUacceleratedGS,
   title={GPU-accelerated Guided Source Separation for Meeting Transcription},
   author={Desh Raj and Daniel Povey and Sanjeev Khudanpur},
-  year={2022}
+  year={2023},
+  booktitle={InterSpeech}
 }
 ```
