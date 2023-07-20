@@ -1,5 +1,4 @@
 import logging
-import warnings
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +24,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d:%H:%M:%S",
     level=logging.INFO,
 )
-logging.captureWarnings(True)
 
 
 def get_enhancer(
@@ -364,8 +362,12 @@ class Enhancer:
         # Trim x_hat to original length of cut
         if right_context > 0:
             x_hat = x_hat[:, left_context:-right_context]
+        elif right_context == 0:
+            x_hat = x_hat[:, left_context:]
         else:
-            warnings.warn(f"Right context is less or equal to zero. Only left context is used.")
+            logging.warning(
+                f"Right context is less than zero. Only left context is used."
+            )
             x_hat = x_hat[:, left_context:]
 
         return x_hat
