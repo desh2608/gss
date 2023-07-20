@@ -360,6 +360,14 @@ class Enhancer:
             x_hat = x_hat[np.newaxis, :]
 
         # Trim x_hat to original length of cut
-        x_hat = x_hat[:, left_context:-right_context]
+        if right_context > 0:
+            x_hat = x_hat[:, left_context:-right_context]
+        elif right_context == 0:
+            x_hat = x_hat[:, left_context:]
+        else:
+            logging.warning(
+                f"Right context is less than zero. Only left context is used."
+            )
+            x_hat = x_hat[:, left_context:]
 
         return x_hat
