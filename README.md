@@ -1,5 +1,7 @@
 <h1 align="center">GPU-accelerated Guided Source Separation</h1>
 
+Paper: https://arxiv.org/abs/2212.05271
+
 **Guided source separation** is a type of blind source separation (blind = no training required)
 in which the mask estimation is guided by a diarizer output. The original method was proposed
 for the CHiME-5 challenge in [this paper](http://spandh.dcs.shef.ac.uk/chime_workshop/papers/CHiME_2018_paper_boeddecker.pdf) by Boeddeker et al.
