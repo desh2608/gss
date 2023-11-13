@@ -301,24 +301,26 @@ class Enhancer:
         D, T, F = Obs.shape
 
         # Process observation in chunks
-        chunk_size = int(np.ceil(T / num_chunks))
+        # Use freq axis as suggested by Christoph Boedekker
+        # see https://github.com/desh2608/gss/issues/33
+        chunk_size = int(np.ceil(F / num_chunks))
         masks = []
         for i in range(num_chunks):
             st = i * chunk_size
-            en = min(T, (i + 1) * chunk_size)
-            Obs_chunk = Obs[:, st:en, :]
+            en = min(F, (i + 1) * chunk_size)
+            Obs_chunk = Obs[:, :, st:en]
 
             logging.debug(f"Applying WPE")
             if self.wpe_block is not None:
                 Obs_chunk = self.wpe_block(Obs_chunk)
                 # Replace the chunk in the original array (to save memory)
-                Obs[:, st:en, :] = Obs_chunk
+                Obs[:, :, st:en] = Obs_chunk
 
             logging.debug(f"Computing GSS masks")
             masks_chunk = self.gss_block(Obs_chunk, activity_freq[:, st:en])
             masks.append(masks_chunk)
 
-        masks = cp.concatenate(masks, axis=1)
+        masks = cp.concatenate(masks, axis=-1) # concat along freq
         if self.bf_drop_context:
             logging.debug("Dropping context for beamforming")
             left_context_frames, right_context_frames = start_end_context_frames(
@@ -343,15 +345,15 @@ class Enhancer:
         X_hat = []
         for i in range(num_chunks):
             st = i * chunk_size
-            en = min(T, (i + 1) * chunk_size)
+            en = min(F, (i + 1) * chunk_size)
             X_hat_chunk = self.bf_block(
-                Obs[:, st:en, :],
-                target_mask=target_mask[st:en],
-                distortion_mask=distortion_mask[st:en],
+                Obs[:, :, st:en],
+                target_mask=target_mask[:, st:en],
+                distortion_mask=distortion_mask[:, st:en],
             )
             X_hat.append(X_hat_chunk)
 
-        X_hat = cp.concatenate(X_hat, axis=0)
+        X_hat = cp.concatenate(X_hat, axis=1) # freq axis again
 
         logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)  # returns a numpy array
