@@ -1,10 +1,12 @@
 import cupy as cp
 from cached_property import cached_property
 
-from gss.beamformer.beamform import (apply_beamforming_vector,
-                                     blind_analytic_normalization,
-                                     get_mvdr_vector_souden,
-                                     get_power_spectral_density_matrix)
+from gss.beamformer.beamform import (
+    apply_beamforming_vector,
+    blind_analytic_normalization,
+    get_mvdr_vector_souden,
+    get_power_spectral_density_matrix,
+)
 from gss.beamformer.utils import morph
 
 # The _Beamformer class is modified from:

@@ -7,14 +7,17 @@ from types import SimpleNamespace
 import cupy as cp
 import numpy as np
 import soundfile as sf
-from lhotse import (CutSet, Recording, RecordingSet, SupervisionSegment,
-                    SupervisionSet)
+from lhotse import CutSet, Recording, RecordingSet, SupervisionSegment, SupervisionSet
 from lhotse.utils import add_durations, compute_num_samples
 from torch.utils.data import DataLoader
 
 from gss.core import GSS, WPE, Activity, Beamformer
-from gss.utils.data_utils import (GssDataset, activity_time_to_frequency,
-                                  create_sampler, start_end_context_frames)
+from gss.utils.data_utils import (
+    GssDataset,
+    activity_time_to_frequency,
+    create_sampler,
+    start_end_context_frames,
+)
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
