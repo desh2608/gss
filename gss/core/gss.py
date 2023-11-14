@@ -10,19 +10,18 @@ class GSS:
     iterations: int
     iterations_post: int
 
-    def __call__(self, Obs, acitivity_freq):
-
-        initialization = cp.asarray(acitivity_freq, dtype=cp.float64)
+    def __call__(self, Obs, activity_freq):
+        D, T, F = Obs.shape
+        initialization = cp.asarray(activity_freq, dtype=cp.float64)
         initialization = cp.where(initialization == 0, 1e-10, initialization)
         initialization = initialization / cp.sum(initialization, keepdims=True, axis=0)
-        initialization = cp.repeat(initialization[None, ...], 513, axis=0)
+        initialization = cp.repeat(initialization[None, ...], F, axis=0)
 
-        source_active_mask = cp.asarray(acitivity_freq, dtype=cp.bool)
-        source_active_mask = cp.repeat(source_active_mask[None, ...], 513, axis=0)
+        source_active_mask = cp.asarray(activity_freq, dtype=cp.bool)
+        source_active_mask = cp.repeat(source_active_mask[None, ...], F, axis=0)
 
         cacGMM = CACGMMTrainer()
 
-        D, T, F = Obs.shape
 
         cur = cacGMM.fit(
             y=Obs.T,

@@ -229,7 +229,8 @@ class Enhancer:
                 # happens, we increasingly chunk it up into smaller segments until it can
                 # be processed without breaking.
                 num_chunks = 1
-                while True:
+                max_chunks = self.stft_size // 2 + 1
+                while num_chunks <= max_chunks:
                     try:
                         x_hat = self.enhance_batch(
                             batch.audio,
@@ -254,6 +255,12 @@ class Enhancer:
                         # want to handle this case separately.
                         x_hat = batch.audio[0:1].cpu().numpy()
                         break
+                if num_chunks > max_chunks:
+                    # OOM error
+                    logging.error(f"Out of memory error while processing the batch. "
+                                  f"Reached the maximum number of chunks, exiting."
+                                  f"Please reduce --max-batch-duration.")
+                    raise cp.cuda.memory.OutOfMemoryError
 
                 # Save the enhanced cut to disk
                 futures.append(
@@ -317,7 +324,7 @@ class Enhancer:
                 Obs[:, :, st:en] = Obs_chunk
 
             logging.debug(f"Computing GSS masks")
-            masks_chunk = self.gss_block(Obs_chunk, activity_freq[:, st:en])
+            masks_chunk = self.gss_block(Obs_chunk, activity_freq)
             masks.append(masks_chunk)
 
         masks = cp.concatenate(masks, axis=-1) # concat along freq
