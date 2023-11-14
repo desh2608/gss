@@ -7,17 +7,14 @@ from types import SimpleNamespace
 import cupy as cp
 import numpy as np
 import soundfile as sf
-from lhotse import CutSet, Recording, RecordingSet, SupervisionSegment, SupervisionSet
+from lhotse import (CutSet, Recording, RecordingSet, SupervisionSegment,
+                    SupervisionSet)
 from lhotse.utils import add_durations, compute_num_samples
 from torch.utils.data import DataLoader
 
 from gss.core import GSS, WPE, Activity, Beamformer
-from gss.utils.data_utils import (
-    GssDataset,
-    activity_time_to_frequency,
-    create_sampler,
-    start_end_context_frames,
-)
+from gss.utils.data_utils import (GssDataset, activity_time_to_frequency,
+                                  create_sampler, start_end_context_frames)
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
@@ -257,9 +254,11 @@ class Enhancer:
                         break
                 if num_chunks > max_chunks:
                     # OOM error
-                    logging.error(f"Out of memory error while processing the batch. "
-                                  f"Reached the maximum number of chunks, exiting."
-                                  f"Please reduce --max-batch-duration.")
+                    logging.error(
+                        f"Out of memory error while processing the batch. "
+                        f"Reached the maximum number of chunks, exiting."
+                        f"Please reduce --max-batch-duration."
+                    )
                     raise cp.cuda.memory.OutOfMemoryError
 
                 # Save the enhanced cut to disk
@@ -289,7 +288,6 @@ class Enhancer:
     def enhance_batch(
         self, obs, activity, speaker_id, num_chunks=1, left_context=0, right_context=0
     ):
-
         logging.debug(f"Converting activity to frequency domain")
         activity_freq = activity_time_to_frequency(
             activity,
@@ -327,7 +325,7 @@ class Enhancer:
             masks_chunk = self.gss_block(Obs_chunk, activity_freq)
             masks.append(masks_chunk)
 
-        masks = cp.concatenate(masks, axis=-1) # concat along freq
+        masks = cp.concatenate(masks, axis=-1)  # concat along freq
         if self.bf_drop_context:
             logging.debug("Dropping context for beamforming")
             left_context_frames, right_context_frames = start_end_context_frames(
@@ -360,7 +358,7 @@ class Enhancer:
             )
             X_hat.append(X_hat_chunk)
 
-        X_hat = cp.concatenate(X_hat, axis=1) # freq axis again
+        X_hat = cp.concatenate(X_hat, axis=1)  # freq axis again
 
         logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)  # returns a numpy array

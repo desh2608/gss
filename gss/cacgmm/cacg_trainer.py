@@ -4,11 +4,8 @@
 import cupy as cp
 
 from gss.cacgmm.cacg import ComplexAngularCentralGaussian
-from gss.cacgmm.utils import (
-    force_hermitian,
-    is_broadcast_compatible,
-    normalize_observation,
-)
+from gss.cacgmm.utils import (force_hermitian, is_broadcast_compatible,
+                              normalize_observation)
 
 
 class ComplexAngularCentralGaussianTrainer:

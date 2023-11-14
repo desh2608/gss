@@ -11,7 +11,6 @@ class WPE:
     psd_context: int
 
     def __call__(self, Obs):
-
         Obs = wpe(
             Obs.transpose(2, 0, 1),
             taps=self.taps,

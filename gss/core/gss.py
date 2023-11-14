@@ -22,7 +22,6 @@ class GSS:
 
         cacGMM = CACGMMTrainer()
 
-
         cur = cacGMM.fit(
             y=Obs.T,
             initialization=initialization[..., :T],

@@ -8,7 +8,6 @@ class Beamformer:
     postfilter: str
 
     def __call__(self, Obs, target_mask, distortion_mask):
-
         X_hat = beamform_mvdr(
             Y=Obs, X_mask=target_mask, N_mask=distortion_mask, ban=True
         )
