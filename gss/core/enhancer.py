@@ -206,7 +206,7 @@ class Enhancer:
                 batch = SimpleNamespace(**batch)
                 logging.info(
                     f"Processing batch {batch_idx+1} {batch.recording_id, batch.speaker}: "
-                    f"{len(batch.orig_cuts)} segments = {batch.duration}s (total: {total_processed} segments)"
+                    f"{len(batch.orig_cuts)} segments = {batch.duration}s (tot processed: {total_processed} segments)"
                 )
                 total_processed += len(batch.orig_cuts)
 
@@ -243,7 +243,8 @@ class Enhancer:
                         break
                     except cp.cuda.memory.OutOfMemoryError:
                         num_chunks = num_chunks + 1
-                        logging.warning(
+                        if num_chunks <= max_chunks:
+                            logging.warning(
                             f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
                         )
                     except Exception as e:
