@@ -245,8 +245,8 @@ class Enhancer:
                         num_chunks = num_chunks + 1
                         if num_chunks <= max_chunks:
                             logging.warning(
-                            f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
-                        )
+                                f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
+                            )
                     except Exception as e:
                         logging.error(f"Error enhancing batch: {e}")
                         num_error += 1
