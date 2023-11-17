@@ -1,8 +1,18 @@
 from pathlib import Path
 
 import click
-
+import subprocess
+import os
+import re
 from gss.bin.modes.cli_base import cli
+import logging
+
+logging.basicConfig(
+    format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
+    datefmt="%Y-%m-%d:%H:%M:%S",
+    level=logging.INFO,
+)
+logger = logging.getLogger(__name__)
 
 
 @cli.group()
@@ -37,6 +47,27 @@ def rttm_to_supervisions_(rttm_path, out_path, channels):
         [fastcopy(s, channel=list(range(channels))) for s in supervisions]
     )
     supervisions.to_file(out_path)
+
+
+@utils.command(name="gpu_check")
+@click.argument("num_jobs", type=int)
+@click.argument("cmd", type=str)
+def gpu_check_(num_jobs, cmd):
+    if cmd == "run.pl" and num_jobs > 1:
+        used_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")
+        for device in used_devices:
+            grep_res = subprocess.check_output(("nvidia-smi", "-i", f"{device}", "-q"))
+            check = re.findall("Compute Mode\s+:\sDefault", str(grep_res))
+            if not len(check) == 0:
+                logging.error(
+                    "This code may not work as expected with multiple GPUs "
+                    f"and non exclusive process compute mode."
+                    f" GPU {device} is in Default mode."
+                    f" Please switch compute mode using nvidia-smi."
+                )
+                raise RuntimeError(
+                    f"GPU {device} not in exclusive process compute mode."
+                )
 
 
 @utils.command(name="split")
