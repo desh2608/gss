@@ -152,6 +152,28 @@ using Snakeviz.
 
 * `--force-overwrite`: Flag to force enhanced audio files to be overwritten.
 
+### Multi-GPU Usage
+You can refer to e.g. the [AMI recipe](./recipes/ami/run.sh) for how to use this toolkit 
+with multiple GPUs. <br>
+**NOTE**: your GPUs must be in Exclusive_Thread mode, otherwise this library may not work as expected and/or the inference 
+time will greatly increase. **This is especially important if you are using** `run.pl`. <br>
+You can check the compute mode of GPU `X` using:
+```bash
+nvidia-smi -i X -q | grep "Compute Mode"
+```
+We also provide an automate tool to do that called `gpu_check` which takes as arguments the cmd used (e.g. run.pl) and number of jobs: 
+```bash
+ $cmd JOB=1:$nj  ${exp_dir}/${dset_name}/${dset_part}/log/enhance.JOB.log \
+    gss utils gpu_check $nj $cmd \& gss enhance cuts \
+      ${exp_dir}/${dset_name}/${dset_part}/cuts.jsonl.gz ${exp_dir}/${dset_name}/${dset_part}/split$nj/cuts_per_segment.JOB.jsonl.gz \
+       ${exp_dir}/${dset_name}/${dset_part}/enhanced \
+      --bss-iterations $gss_iterations \
+      --context-duration 15.0 \
+      --use-garbage-class \
+      --max-batch-duration 120 \
+       ${affix} || exit 1
+```
+See again [AMI recipe](./recipes/ami/run.sh) or the [CHiME-7 DASR GSS code](https://github.com/espnet/espnet/blob/master/egs2/chime7_task1/asr1/local/run_gss.sh). 
 ## FAQ
 
 **What happens if I set the `--max-batch-duration` too large?**

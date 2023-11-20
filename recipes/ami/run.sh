@@ -59,7 +59,7 @@ fi
 if [ $stage -le 5 ] && [ $stop_stage -ge 5 ]; then
     echo "Stage 5: Enhance segments using GSS"
     $cmd JOB=1:$nj $EXP_DIR/log/enhance.JOB.log \
-        gss enhance cuts \
+        gss utils gpu_check $nj $cmd \& gss enhance cuts \
           $EXP_DIR/cuts.jsonl.gz $EXP_DIR/split$nj/cuts_per_segment.JOB.jsonl.gz \
           $EXP_DIR/enhanced \
           --channels 0,1,2,3,4,5,6,7 \

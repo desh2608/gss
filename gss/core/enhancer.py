@@ -206,7 +206,7 @@ class Enhancer:
                 batch = SimpleNamespace(**batch)
                 logging.info(
                     f"Processing batch {batch_idx+1} {batch.recording_id, batch.speaker}: "
-                    f"{len(batch.orig_cuts)} segments = {batch.duration}s (total: {total_processed} segments)"
+                    f"{len(batch.orig_cuts)} segments = {batch.duration}s (tot processed: {total_processed} segments)"
                 )
                 total_processed += len(batch.orig_cuts)
 
@@ -229,7 +229,8 @@ class Enhancer:
                 # happens, we increasingly chunk it up into smaller segments until it can
                 # be processed without breaking.
                 num_chunks = 1
-                while True:
+                max_chunks = self.stft_size // 2 + 1
+                while num_chunks <= max_chunks:
                     try:
                         x_hat = self.enhance_batch(
                             batch.audio,
@@ -242,9 +243,10 @@ class Enhancer:
                         break
                     except cp.cuda.memory.OutOfMemoryError:
                         num_chunks = num_chunks + 1
-                        logging.warning(
-                            f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
-                        )
+                        if num_chunks <= max_chunks:
+                            logging.warning(
+                                f"Out of memory error while processing the batch. Trying again with {num_chunks} chunks."
+                            )
                     except Exception as e:
                         logging.error(f"Error enhancing batch: {e}")
                         num_error += 1
@@ -254,6 +256,14 @@ class Enhancer:
                         # want to handle this case separately.
                         x_hat = batch.audio[0:1].cpu().numpy()
                         break
+                if num_chunks > max_chunks:
+                    # OOM error
+                    logging.error(
+                        f"Out of memory error while processing the batch. "
+                        f"Reached the maximum number of chunks, exiting."
+                        f"Please reduce --max-batch-duration."
+                    )
+                    raise cp.cuda.memory.OutOfMemoryError
 
                 # Save the enhanced cut to disk
                 futures.append(
@@ -282,7 +292,6 @@ class Enhancer:
     def enhance_batch(
         self, obs, activity, speaker_id, num_chunks=1, left_context=0, right_context=0
     ):
-
         logging.debug(f"Converting activity to frequency domain")
         activity_freq = activity_time_to_frequency(
             activity,
@@ -301,24 +310,26 @@ class Enhancer:
         D, T, F = Obs.shape
 
         # Process observation in chunks
-        chunk_size = int(np.ceil(T / num_chunks))
+        # Use freq axis as suggested by Christoph Boedekker
+        # see https://github.com/desh2608/gss/issues/33
+        chunk_size = int(np.ceil(F / num_chunks))
         masks = []
         for i in range(num_chunks):
             st = i * chunk_size
-            en = min(T, (i + 1) * chunk_size)
-            Obs_chunk = Obs[:, st:en, :]
+            en = min(F, (i + 1) * chunk_size)
+            Obs_chunk = Obs[:, :, st:en]
 
             logging.debug(f"Applying WPE")
             if self.wpe_block is not None:
                 Obs_chunk = self.wpe_block(Obs_chunk)
                 # Replace the chunk in the original array (to save memory)
-                Obs[:, st:en, :] = Obs_chunk
+                Obs[:, :, st:en] = Obs_chunk
 
             logging.debug(f"Computing GSS masks")
-            masks_chunk = self.gss_block(Obs_chunk, activity_freq[:, st:en])
+            masks_chunk = self.gss_block(Obs_chunk, activity_freq)
             masks.append(masks_chunk)
 
-        masks = cp.concatenate(masks, axis=1)
+        masks = cp.concatenate(masks, axis=-1)  # concat along freq
         if self.bf_drop_context:
             logging.debug("Dropping context for beamforming")
             left_context_frames, right_context_frames = start_end_context_frames(
@@ -343,15 +354,15 @@ class Enhancer:
         X_hat = []
         for i in range(num_chunks):
             st = i * chunk_size
-            en = min(T, (i + 1) * chunk_size)
+            en = min(F, (i + 1) * chunk_size)
             X_hat_chunk = self.bf_block(
-                Obs[:, st:en, :],
-                target_mask=target_mask[st:en],
-                distortion_mask=distortion_mask[st:en],
+                Obs[:, :, st:en],
+                target_mask=target_mask[:, st:en],
+                distortion_mask=distortion_mask[:, st:en],
             )
             X_hat.append(X_hat_chunk)
 
-        X_hat = cp.concatenate(X_hat, axis=0)
+        X_hat = cp.concatenate(X_hat, axis=1)  # freq axis again
 
         logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)  # returns a numpy array
