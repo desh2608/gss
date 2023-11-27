@@ -217,7 +217,7 @@ def activity_time_to_frequency(
     stft_fading,
     stft_pad=True,
 ):
-    assert np.asarray(time_activity).dtype != np.object, (
+    assert np.asarray(time_activity).dtype != object, (
         type(time_activity),
         np.asarray(time_activity).dtype,
     )

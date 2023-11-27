@@ -105,7 +105,7 @@ class CACGMMTrainer:
 
         if source_activity_mask is not None:
             assert (
-                source_activity_mask.dtype == cp.bool
+                source_activity_mask.dtype == cp.bool_
             ), source_activity_mask.dtype  # noqa
             assert source_activity_mask.shape[-2:] == (num_classes, num_observations), (
                 source_activity_mask.shape,

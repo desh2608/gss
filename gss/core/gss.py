@@ -17,7 +17,7 @@ class GSS:
         initialization = initialization / cp.sum(initialization, keepdims=True, axis=0)
         initialization = cp.repeat(initialization[None, ...], F, axis=0)
 
-        source_active_mask = cp.asarray(activity_freq, dtype=cp.bool)
+        source_active_mask = cp.asarray(activity_freq, dtype=cp.bool_)
         source_active_mask = cp.repeat(source_active_mask[None, ...], F, axis=0)
 
         cacGMM = CACGMMTrainer()
