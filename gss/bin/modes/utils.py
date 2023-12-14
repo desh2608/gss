@@ -1,11 +1,12 @@
+import logging
+import os
+import re
+import subprocess
 from pathlib import Path
 
 import click
-import subprocess
-import os
-import re
+
 from gss.bin.modes.cli_base import cli
-import logging
 
 logging.basicConfig(
     format="%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s",
