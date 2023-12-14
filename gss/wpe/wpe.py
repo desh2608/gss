@@ -106,7 +106,7 @@ def window_mean(x, lr_context, axis=-1):
     if window_length == 0:
         return x
 
-    pad_width = np.zeros((x.ndim, 2), dtype=int64)
+    pad_width = np.zeros((x.ndim, 2), dtype=np.int64)
     pad_width[axis] = lr_context
 
     first_slice = [slice(None)] * x.ndim
