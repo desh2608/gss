@@ -45,7 +45,7 @@ def build_y_tilde(Y, taps, delay):
     T = Y.shape[-1]
 
     def pad(x, axis=-1, pad_width=taps + delay - 1):
-        npad = np.zeros([x.ndim, 2], dtype=np.int)
+        npad = np.zeros([x.ndim, 2], dtype=int)
         npad[axis, 0] = pad_width
         x = cp.pad(x, pad_width=npad, mode="constant", constant_values=0)
         return x
@@ -106,7 +106,7 @@ def window_mean(x, lr_context, axis=-1):
     if window_length == 0:
         return x
 
-    pad_width = np.zeros((x.ndim, 2), dtype=np.int64)
+    pad_width = np.zeros((x.ndim, 2), dtype=int64)
     pad_width[axis] = lr_context
 
     first_slice = [slice(None)] * x.ndim

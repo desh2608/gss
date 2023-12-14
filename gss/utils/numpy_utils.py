@@ -67,13 +67,13 @@ def segment_axis(
             npad[axis, 1] = length - x.shape[axis]
             x = xp.pad(x, pad_width=npad, mode=pad_mode, **pad_kwargs)
         elif shift != 1 and (x.shape[axis] + shift - length) % shift != 0:
-            npad = np.zeros([x.ndim, 2], dtype=np.int)
+            npad = np.zeros([x.ndim, 2], dtype=int)
             npad[axis, 1] = shift - ((x.shape[axis] + shift - length) % shift)
             x = xp.pad(x, pad_width=npad, mode=pad_mode, **pad_kwargs)
 
     elif end == "conv_pad":
         assert shift == 1, shift
-        npad = np.zeros([x.ndim, 2], dtype=np.int)
+        npad = np.zeros([x.ndim, 2], dtype=int)
         npad[axis, :] = length - shift
         x = xp.pad(x, pad_width=npad, mode=pad_mode, **pad_kwargs)
     elif end is None:
