@@ -45,7 +45,7 @@ def stft(
     # Pad with zeros to have enough samples for the window function to fade.
     assert fading in [None, True, False, "full", "half"], fading
     if fading not in [False, None]:
-        pad_width = np.zeros([ndim, 2], dtype=np.int)
+        pad_width = np.zeros([ndim, 2], dtype=int)
         if fading == "half":
             pad_width[axis, 0] = (window_length - shift) // 2
             pad_width[axis, 1] = ceil((window_length - shift) / 2)
