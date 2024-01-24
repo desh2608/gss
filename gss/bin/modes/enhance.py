@@ -37,6 +37,23 @@ def common_options(func):
         "`--channels 0,2,4`. All channels will be used by default.",
     )
     @click.option(
+        "--select-channels-by-count",
+        type=int,
+        default=None,
+        help="Number of channels to select for enhancement. If specified, we will use an envelope "
+        "variance based method to select the best channels. If `--channels` is also specified, we will "
+        "select the best channels from the specified channels.",
+    )
+    @click.option(
+        "--select-channels-by-ratio",
+        type=click.FloatRange(0.0, 1.0),
+        default=None,
+        help="Ratio of channels to select for enhancement. If specified, we will use an envelope "
+        "variance based method to select the best channels. If `--channels` is also specified, we will "
+        "select the best channels from the specified channels. Note that we will use at least 2 channels "
+        "and at most the number of channels given by `--channels`.",
+    )
+    @click.option(
         "--bss-iterations",
         "-i",
         type=int,
@@ -157,6 +174,8 @@ def cuts_(
     cuts_per_segment,
     enhanced_dir,
     channels,
+    select_channels_by_count,
+    select_channels_by_ratio,
     bss_iterations,
     use_wpe,
     context_duration,
@@ -194,6 +213,10 @@ def cuts_(
             pstats.Stats(pr).sort_stats("cumulative").dump_stats(profiler_output)
 
         atexit.register(exit)
+
+    assert not (
+        select_channels_by_count and select_channels_by_ratio
+    ), "Please specify at most one of --select-channels-by-count and --select-channels-by-ratio"
 
     if duration_tolerance is not None:
         set_audio_duration_mismatch_tolerance(duration_tolerance)
@@ -237,6 +260,8 @@ def cuts_(
         num_workers=num_workers,
         num_buckets=num_buckets,
         force_overwrite=force_overwrite,
+        select_channels_by_count=select_channels_by_count,
+        select_channels_by_ratio=select_channels_by_ratio,
     )
     end = time.time()
     logger.info(f"Finished in {end-begin:.2f}s with {num_errors} errors")
@@ -273,6 +298,8 @@ def recording_(
     enhanced_dir,
     recording_id,
     channels,
+    select_channels_by_count,
+    select_channels_by_ratio,
     bss_iterations,
     use_wpe,
     context_duration,
@@ -309,6 +336,10 @@ def recording_(
             pstats.Stats(pr).sort_stats("cumulative").dump_stats(profiler_output)
 
         atexit.register(exit)
+
+    assert not (
+        select_channels_by_count and select_channels_by_ratio
+    ), "Please specify at most one of --select-channels-by-count and --select-channels-by-ratio"
 
     enhanced_dir = Path(enhanced_dir)
     enhanced_dir.mkdir(exist_ok=True, parents=True)
@@ -359,6 +390,8 @@ def recording_(
         num_workers=num_workers,
         num_buckets=num_buckets,
         force_overwrite=force_overwrite,
+        select_channels_by_count=select_channels_by_count,
+        select_channels_by_ratio=select_channels_by_ratio,
     )
     end = time.time()
     logger.info(f"Finished in {end-begin:.2f}s with {num_errors} errors")
