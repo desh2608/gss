@@ -56,6 +56,7 @@ def rttm_to_supervisions_(rttm_path, out_path, channels):
 def gpu_check_(num_jobs, cmd):
     if cmd == "run.pl" and num_jobs > 1:
         used_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(",")
+        assert num_jobs <= len(used_devices), f"You are requesting {num_jobs} jobs but you have {len(used_devices)} GPUs available. Exiting !"
         for device in used_devices:
             grep_res = subprocess.check_output(("nvidia-smi", "-i", f"{device}", "-q"))
             check = re.findall("Compute Mode\s+:\sDefault", str(grep_res))
