@@ -179,7 +179,7 @@ See again [AMI recipe](./recipes/ami/run.sh) or the [CHiME-7 DASR GSS code](http
 **What happens if I set the `--max-batch-duration` too large?**
 
 The enhancement would still work, but you will see several warnings of the sort:
-"Out of memory error while processing the batch. Trying again with <num-chunks> chunks.`
+"Out of memory error while processing the batch. Trying again with <num-chunks> chunks."
 Internally, we have a fallback option to chunk up batches into increasingly smaller
 parts in case OOM error is encountered (see `gss.core.enhancer.py` ). However, this
 would slow down processing, so we recommend reducing the batch size if you see this
