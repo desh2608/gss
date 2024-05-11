@@ -98,7 +98,7 @@ def blind_analytic_normalization(vector, noise_psd_matrix):
         vector,
         optimize=einsum_path,
     )
-    nominator = cp.sqrt(nominator)
+    nominator = cp.sqrt(nominator / vector.shape[-1])
 
     einsum_path = ["einsum_path", (0, 1), (0, 1)]
     denominator = cp.einsum(
