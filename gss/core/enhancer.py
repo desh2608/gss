@@ -351,18 +351,9 @@ class Enhancer:
         distortion_mask = cp.sum(masks, axis=0) - target_mask
 
         logging.debug("Applying beamforming with computed masks")
-        X_hat = []
-        for i in range(num_chunks):
-            st = i * chunk_size
-            en = min(F, (i + 1) * chunk_size)
-            X_hat_chunk = self.bf_block(
-                Obs[:, :, st:en],
-                target_mask=target_mask[:, st:en],
-                distortion_mask=distortion_mask[:, st:en],
-            )
-            X_hat.append(X_hat_chunk)
-
-        X_hat = cp.concatenate(X_hat, axis=1)  # freq axis again
+        X_hat = self.bf_block(
+            Obs, target_mask=target_mask, distortion_mask=distortion_mask
+        )
 
         logging.debug("Computing inverse STFT")
         x_hat = self.istft(X_hat)  # returns a numpy array
