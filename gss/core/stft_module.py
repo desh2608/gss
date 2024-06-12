@@ -1,8 +1,9 @@
 # The functions here are modified from:
 # https://github.com/fgnt/paderbox/blob/master/paderbox/transform/module_stft.py
+import math
 import string
-import typing
-from math import ceil
+import warnings
+from typing import Optional, Union
 
 import cupy as cp
 import cupyx as cpx
@@ -48,7 +49,7 @@ def stft(
         pad_width = np.zeros([ndim, 2], dtype=int)
         if fading == "half":
             pad_width[axis, 0] = (window_length - shift) // 2
-            pad_width[axis, 1] = ceil((window_length - shift) / 2)
+            pad_width[axis, 1] = math.ceil((window_length - shift) / 2)
         else:
             pad_width[axis, :] = window_length - shift
         time_signal = cp.pad(time_signal, pad_width, mode="constant")
@@ -127,7 +128,7 @@ def istft(
     size: int = 1024,
     shift: int = 256,
     *,
-    fading: typing.Optional[typing.Union[bool, str]] = "full",
+    fading: Optional[Union[bool, str]] = "full",
 ):
     """
     Calculated the inverse short time Fourier transform to exactly reconstruct
@@ -180,7 +181,165 @@ def istft(
         if fading == "half":
             pad_width /= 2
         time_signal = time_signal[
-            ..., int(pad_width) : time_signal.shape[-1] - ceil(pad_width)
+            ..., int(pad_width) : time_signal.shape[-1] - math.ceil(pad_width)
         ]
 
     return time_signal
+
+
+# The following are modified from:
+# https://github.com/pytorch/audio/blob/main/torchaudio/functional/functional.py
+
+
+def _hz_to_mel(freq: float, mel_scale: str = "htk") -> float:
+    r"""Convert Hz to Mels.
+    Args:
+        freqs (float): Frequencies in Hz
+        mel_scale (str, optional): Scale to use: ``htk`` or ``slaney``. (Default: ``htk``)
+    Returns:
+        mels (float): Frequency in Mels
+    """
+
+    if mel_scale not in ["slaney", "htk"]:
+        raise ValueError('mel_scale should be one of "htk" or "slaney".')
+
+    if mel_scale == "htk":
+        return 2595.0 * math.log10(1.0 + (freq / 700.0))
+
+    # Fill in the linear part
+    f_min = 0.0
+    f_sp = 200.0 / 3
+
+    mels = (freq - f_min) / f_sp
+
+    # Fill in the log-scale part
+    min_log_hz = 1000.0
+    min_log_mel = (min_log_hz - f_min) / f_sp
+    logstep = math.log(6.4) / 27.0
+
+    if freq >= min_log_hz:
+        mels = min_log_mel + math.log(freq / min_log_hz) / logstep
+
+    return mels
+
+
+def _mel_to_hz(mels: cp.ndarray, mel_scale: str = "htk") -> cp.ndarray:
+    """Convert mel bin numbers to frequencies.
+    Args:
+        mels (Tensor): Mel frequencies
+        mel_scale (str, optional): Scale to use: ``htk`` or ``slaney``. (Default: ``htk``)
+    Returns:
+        freqs (Tensor): Mels converted in Hz
+    """
+
+    if mel_scale not in ["slaney", "htk"]:
+        raise ValueError('mel_scale should be one of "htk" or "slaney".')
+
+    if mel_scale == "htk":
+        return 700.0 * (10.0 ** (mels / 2595.0) - 1.0)
+
+    # Fill in the linear scale
+    f_min = 0.0
+    f_sp = 200.0 / 3
+    freqs = f_min + f_sp * mels
+
+    # And now the nonlinear scale
+    min_log_hz = 1000.0
+    min_log_mel = (min_log_hz - f_min) / f_sp
+    logstep = math.log(6.4) / 27.0
+
+    log_t = mels >= min_log_mel
+    freqs[log_t] = min_log_hz * cp.exp(logstep * (mels[log_t] - min_log_mel))
+
+    return
+
+
+def _create_triangular_filterbank(
+    all_freqs: cp.ndarray,
+    f_pts: cp.ndarray,
+) -> cp.ndarray:
+    """Create a triangular filter bank.
+    Args:
+        all_freqs (Array): STFT freq points of size (`n_freqs`).
+        f_pts (Array): Filter mid points of size (`n_filter`).
+    Returns:
+        fb (Array): The filter bank of size (`n_freqs`, `n_filter`).
+    """
+    # Adopted from Librosa
+    # calculate the difference between each filter mid point and each stft freq point in hertz
+    f_diff = f_pts[1:] - f_pts[:-1]  # (n_filter + 1)
+    slopes = cp.expand_dims(f_pts, axis=0) - cp.expand_dims(
+        all_freqs, axis=1
+    )  # (n_freqs, n_filter + 2)
+    # create overlapping triangles
+    zero = cp.zeros(1)
+    down_slopes = (-1.0 * slopes[:, :-2]) / f_diff[:-1]  # (n_freqs, n_filter)
+    up_slopes = slopes[:, 2:] / f_diff[1:]  # (n_freqs, n_filter)
+    fb = cp.maximum(zero, cp.minimum(down_slopes, up_slopes))
+
+    return fb
+
+
+def mel_scale(
+    n_freqs: int,
+    n_mels: int,
+    sample_rate: int,
+    f_min: float = 0.0,
+    f_max: Optional[float] = None,
+    norm: Optional[str] = None,
+    mel_scale: str = "htk",
+) -> cp.ndarray:
+    r"""Create a frequency bin conversion matrix.
+    Note:
+        For the sake of the numerical compatibility with librosa, not all the coefficients
+        in the resulting filter bank has magnitude of 1.
+        .. image:: https://download.pytorch.org/torchaudio/doc-assets/mel_fbanks.png
+           :alt: Visualization of generated filter bank
+    Args:
+        n_freqs (int): Number of frequencies to highlight/apply
+        f_min (float): Minimum frequency (Hz)
+        f_max (float): Maximum frequency (Hz)
+        n_mels (int): Number of mel filterbanks
+        sample_rate (int): Sample rate of the audio waveform
+        norm (str or None, optional): If "slaney", divide the triangular mel weights by the width of the mel band
+            (area normalization). (Default: ``None``)
+        mel_scale (str, optional): Scale to use: ``htk`` or ``slaney``. (Default: ``htk``)
+    Returns:
+        Tensor: Triangular filter banks (fb matrix) of size (``n_freqs``, ``n_mels``)
+        meaning number of frequencies to highlight/apply to x the number of filterbanks.
+        Each column is a filterbank so that assuming there is a matrix A of
+        size (..., ``n_freqs``), the applied result would be
+        ``A * melscale_fbanks(A.size(-1), ...)``.
+    """
+
+    if norm is not None and norm != "slaney":
+        raise ValueError('norm must be one of None or "slaney"')
+
+    # freq bins
+    all_freqs = cp.linspace(0, sample_rate // 2, n_freqs)
+
+    f_max = f_max or float(sample_rate // 2)
+
+    # calculate mel freq bins
+    m_min = _hz_to_mel(f_min, mel_scale=mel_scale)
+    m_max = _hz_to_mel(f_max, mel_scale=mel_scale)
+
+    m_pts = cp.linspace(m_min, m_max, num=n_mels + 2)
+    f_pts = _mel_to_hz(m_pts, mel_scale=mel_scale)
+
+    # create filterbank
+    fb = _create_triangular_filterbank(all_freqs, f_pts)
+
+    if norm is not None and norm == "slaney":
+        # Slaney-style mel is scaled to be approx constant energy per channel
+        enorm = 2.0 / (f_pts[2 : n_mels + 2] - f_pts[:n_mels])
+        fb *= cp.expand_dims(enorm, axis=0)
+
+    if (fb.max(axis=0) == 0.0).any():
+        warnings.warn(
+            "At least one mel filterbank has all zero values. "
+            f"The value for `n_mels` ({n_mels}) may be set too high. "
+            f"Or, the value for `n_freqs` ({n_freqs}) may be set too low."
+        )
+
+    return fb
